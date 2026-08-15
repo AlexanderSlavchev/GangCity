@@ -1,0 +1,12 @@
+# Android / Gradle
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+android/*.iml
+android/captures/
+
+# Разни
+.DS_Store
+node_modules/
