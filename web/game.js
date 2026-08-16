@@ -72,16 +72,51 @@ function tileAt(tx, ty) {
 function tileAtPx(x, y) { return tileAt(Math.floor(x / TILE), Math.floor(y / TILE)); }
 function blockKeyOf(tx, ty) { return Math.floor(tx / BLOCK) + ',' + Math.floor(ty / BLOCK); }
 
-(function genCity() {
-  const WALLS = ['#9a7b64', '#8b8d99', '#ab9070', '#7d8c78', '#997f9e', '#b09a80', '#82909f', '#a58474', '#c0aa8a', '#6f7f8f'];
-  const ROOFS = ['#6e6a66', '#7a7672', '#5f6468', '#746e64', '#686e62', '#7e7468'];
+// Градове (както в класиката: Либърти → Сан Андреас → Вайс Сити)
+const THEMES = [
+  {
+    name: 'Либърти Сити',
+    walls: ['#9a7b64', '#8b8d99', '#ab9070', '#7d8c78', '#997f9e', '#b09a80', '#82909f', '#a58474', '#c0aa8a', '#6f7f8f'],
+    roofs: ['#6e6a66', '#7a7672', '#5f6468', '#746e64', '#686e62', '#7e7468'],
+    road: ['#3a3a40', '#3d3d43'], side: ['#95959c', '#9a9aa1'],
+    park: ['#3e6b3a', '#42703e'], water: '#173352', grass: '#4c6b46',
+    lane: '#c9b23c', parkChance: 0.16, palm: false, metro: '#3a6ea8'
+  },
+  {
+    name: 'Сан Андреас',
+    walls: ['#e8ccb8', '#d4e0c4', '#f0e2c4', '#c4d8e4', '#e4c8d8', '#f0d2a8', '#d6cab2', '#b8d0c2', '#f4e8d0', '#ccb8a0'],
+    roofs: ['#a89078', '#98a088', '#b0a080', '#8a9aa4', '#a4988a', '#9aa48a'],
+    road: ['#46464c', '#49494f'], side: ['#b2aa9a', '#b7afa0'],
+    park: ['#5c7c3c', '#617f40'], water: '#1d5a78', grass: '#6c7c48',
+    lane: '#e8e4d8', parkChance: 0.22, palm: true, metro: '#c03830'
+  },
+  {
+    name: 'Вайс Сити',
+    walls: ['#e8a8c0', '#a8d8d0', '#f0d8b0', '#c4b0e0', '#f0b8a8', '#b8e0f0', '#e8e0d0', '#d8b8d8', '#f8d0c8', '#b0c8e8'],
+    roofs: ['#95788a', '#7a8a92', '#a08a92', '#8a927a', '#928a9a'],
+    road: ['#3e3a42', '#413d45'], side: ['#c2b2a2', '#c7b7a7'],
+    park: ['#4a7a4c', '#4e7e50'], water: '#0e6080', grass: '#5c7a52',
+    lane: '#f0c0d0', parkChance: 0.2, palm: true, metro: '#20a8a0'
+  }
+];
+let cityIdx = 0;
+let theme = THEMES[0];
+let hospitalDoor = null, policeDoor = null, resprayDoor = null;
+const phones = [];
+const frenzySpots = [];
+const miniCanvas = document.createElement('canvas');
+
+function genCityMap(idx) {
+  cityIdx = idx;
+  theme = THEMES[idx % THEMES.length];
+  seed = 20977 + idx * 7919 + level * 104729;
   const blockType = {};
   for (let by = 0; by < MH / BLOCK; by++) {
     for (let bx = 0; bx < MW / BLOCK; bx++) {
       const key = bx + ',' + by;
-      blockType[key] = rnd() < 0.16 ? 'park' : 'build';
-      blockColor[key] = WALLS[Math.floor(rnd() * WALLS.length)];
-      blockRoof[key] = ROOFS[Math.floor(rnd() * ROOFS.length)];
+      blockType[key] = rnd() < theme.parkChance ? 'park' : 'build';
+      blockColor[key] = theme.walls[Math.floor(rnd() * theme.walls.length)];
+      blockRoof[key] = theme.roofs[Math.floor(rnd() * theme.roofs.length)];
       blockHeight[key] = 1 + Math.floor(rnd() * 3); // 1..3 етажни групи
     }
   }
@@ -115,7 +150,45 @@ function blockKeyOf(tx, ty) { return Math.floor(tx / BLOCK) + ',' + Math.floor(t
       map[y * MW + x] = t;
     }
   }
-})();
+
+  // Входове на специалните сгради
+  hospitalDoor = blockDoor(hospitalBlock);
+  policeDoor = blockDoor(policeBlock);
+  resprayDoor = blockDoor(resprayBlock);
+
+  // Телефони — 6, радиално около центъра
+  phones.length = 0;
+  {
+    const cx = MW / 2 * TILE, cy = MH / 2 * TILE;
+    for (let k = 0; k < 6; k++) {
+      const a = k * Math.PI / 3 + 0.4;
+      const s = nearestSideTile(cx + Math.cos(a) * 14 * TILE, cy + Math.sin(a) * 14 * TILE, 500);
+      if (s) phones.push({ x: s.x, y: s.y, ringing: false });
+    }
+  }
+  // Kill Frenzy пикапи
+  frenzySpots.length = 0;
+  {
+    const cx = MW / 2 * TILE, cy = MH / 2 * TILE;
+    for (const a of [0.9, 3.6, 5.4]) {
+      const s = nearestSideTile(cx + Math.cos(a) * 20 * TILE, cy + Math.sin(a) * 20 * TILE, 600);
+      if (s) frenzySpots.push({ x: s.x, y: s.y, taken: false, respawn: 0 });
+    }
+  }
+  renderMini();
+  initMetro();
+}
+function renderMini() {
+  miniCanvas.width = MW; miniCanvas.height = MH;
+  const mc = miniCanvas.getContext('2d');
+  for (let y = 0; y < MH; y++) {
+    for (let x = 0; x < MW; x++) {
+      const t = map[y * MW + x];
+      mc.fillStyle = t === T.ROAD ? '#54545a' : t === T.WATER ? theme.water : t === T.BUILD ? '#8a7666' : t === T.PARK ? theme.park[0] : '#84848a';
+      mc.fillRect(x, y, 1, 1);
+    }
+  }
+}
 
 function isSolid(t) { return t === T.BUILD || t === T.WATER; }
 
@@ -183,31 +256,7 @@ function blockDoor(key) {
   const cx = (bx * BLOCK + BLOCK / 2) * TILE, cy = (by * BLOCK + BLOCK / 2) * TILE;
   return nearestSideTile(cx, cy + BLOCK / 2 * TILE, 500) || { x: cx, y: cy };
 }
-const hospitalDoor = blockDoor(hospitalBlock);
-const policeDoor = blockDoor(policeBlock);
-const resprayDoor = blockDoor(resprayBlock);
-
-// Телефонни будки — 6, разположени радиално около центъра
-const phones = [];
-(function placePhones() {
-  const cx = MW / 2 * TILE, cy = MH / 2 * TILE;
-  for (let k = 0; k < 6; k++) {
-    const a = k * Math.PI / 3 + 0.4;
-    const px = cx + Math.cos(a) * 14 * TILE, py = cy + Math.sin(a) * 14 * TILE;
-    const s = nearestSideTile(px, py, 500);
-    if (s) phones.push({ x: s.x, y: s.y, ringing: false });
-  }
-})();
-
-// Kill Frenzy пикапи
-const frenzySpots = [];
-(function placeFrenzy() {
-  const cx = MW / 2 * TILE, cy = MH / 2 * TILE;
-  for (const a of [0.9, 3.6, 5.4]) {
-    const s = nearestSideTile(cx + Math.cos(a) * 20 * TILE, cy + Math.sin(a) * 20 * TILE, 600);
-    if (s) frenzySpots.push({ x: s.x, y: s.y, taken: false, respawn: 0 });
-  }
-})();
+// Входовете, телефоните и Kill Frenzy пикапите се задават в genCityMap()
 
 // ---------------- Аудио ----------------
 const AudioSys = {
@@ -324,7 +373,7 @@ const particles = [], skids = [], floaters = [];
 const player = {
   x: 0, y: 0, angle: 0,
   hp: 100, armor: 0,
-  car: null, weapon: 1, ammo: [-1, 30, 0, 0, 0],
+  car: null, onTrain: null, weapon: 1, ammo: [-1, 30, 0, 0, 0],
   fireT: 0, dead: false, deadT: 0, busted: false, bustedT: 0,
   wanted: 0, heat: 0, lastCrimeT: -999
 };
@@ -335,6 +384,7 @@ const frenzy = { active: false, timer: 0, kills: 0, goal: 8, savedWeapon: 0, sav
 const gour = { count: 0, timer: 0 };
 let resprayCooldown = 0;
 let levelCompleteT = 0, gameOver = false;
+let citySwitchPending = false, travelToName = '';
 
 let camX = 0, camY = 0, camZoom = 1;
 let gameT = 0, paused = false, started = false;
@@ -354,21 +404,24 @@ function addScore(points, atX, atY) {
     levelCompleteT = 5;
     level++; lives++;
     targetScore = Math.round(targetScore * 3);
+    citySwitchPending = true;
+    travelToName = THEMES[(cityIdx + 1) % THEMES.length].name;
     AudioSys.gouranga();
   }
 }
 
-// Начална позиция
-(function placePlayer() {
+function playerToStart() {
   const s = nearestSideTile(MW / 2 * TILE, MH / 2 * TILE, 600);
   player.x = s ? s.x : MW / 2 * TILE;
   player.y = s ? s.y : MH / 2 * TILE;
-})();
-camX = player.x; camY = player.y;
+  camX = player.x; camY = player.y;
+}
 
-// Населяване
-(function populate() {
-  for (let i = 0; i < 26; i++) {
+// Населяване на града (извиква се при всяка смяна на град)
+function spawnWorld() {
+  cars.length = 0; peds.length = 0; pickups.length = 0;
+  projectiles.length = 0; particles.length = 0; skids.length = 0; floaters.length = 0;
+  for (let i = 0; i < 36; i++) {
     const s = randomRoadSpot();
     if (!s) continue;
     const r = R();
@@ -400,7 +453,96 @@ camX = player.x; camY = player.y;
       pl++;
     }
   }
-})();
+}
+
+// ---------------- Метро (надземна обиколна линия) ----------------
+const METRO = {
+  xL: 12 * TILE, xR: 52 * TILE, yT: 12 * TILE, yB: 52 * TILE,
+  f: 0.075,           // фактор на височина за проекцията
+  carLen: 50, carGap: 7, carsPerTrain: 3
+};
+METRO.W = METRO.xR - METRO.xL;
+METRO.H = METRO.yB - METRO.yT;
+METRO.P = 2 * (METRO.W + METRO.H);
+// Спирки: средите на четирите страни
+METRO.stationS = [METRO.W / 2, METRO.W + METRO.H / 2, METRO.W + METRO.H + METRO.W / 2, 2 * METRO.W + METRO.H + METRO.H / 2];
+const trains = [];
+let stationEntrances = [];
+
+function ringPoint(s) {
+  const { xL, xR, yT, yB, W, H, P } = METRO;
+  s = ((s % P) + P) % P;
+  if (s < W) return { x: xL + s, y: yT, a: 0 };
+  if (s < W + H) return { x: xR, y: yT + (s - W), a: Math.PI / 2 };
+  if (s < 2 * W + H) return { x: xR - (s - W - H), y: yB, a: Math.PI };
+  return { x: xL, y: yB - (s - 2 * W - H), a: -Math.PI / 2 };
+}
+function initMetro() {
+  stationEntrances = METRO.stationS.map(s => {
+    const p = ringPoint(s);
+    return nearestSideTile(p.x, p.y, 400) || { x: p.x, y: p.y };
+  });
+  trains.length = 0;
+  trains.push({ s: METRO.stationS[0], v: 0, dir: 1, dwell: 4, stationIdx: 0, nextIdx: 1 });
+  trains.push({ s: METRO.stationS[2], v: 0, dir: -1, dwell: 4, stationIdx: 2, nextIdx: 1 });
+  if (player) player.onTrain = null;
+}
+function distAhead(t, targetS) {
+  const P = METRO.P;
+  return (((targetS - t.s) * t.dir) % P + P) % P;
+}
+function updateMetro(dt) {
+  for (const t of trains) {
+    if (t.dwell > 0) {
+      t.dwell -= dt; t.v = 0;
+      if (t.dwell <= 0) {
+        t.stationIdx = -1;
+      }
+      continue;
+    }
+    const targetS = METRO.stationS[t.nextIdx];
+    const d = distAhead(t, targetS);
+    const brakeDist = t.v * t.v / (2 * 170) + 10;
+    const maxV = 360;
+    if (d < brakeDist) t.v = Math.max(40, t.v - 200 * dt);
+    else t.v = Math.min(maxV, t.v + 130 * dt);
+    t.s = ((t.s + t.v * t.dir * dt) % METRO.P + METRO.P) % METRO.P;
+    if (d < 8 || distAhead(t, targetS) > METRO.P - 30) {
+      // Пристигане на спирка
+      t.s = targetS; t.v = 0;
+      t.stationIdx = t.nextIdx;
+      t.dwell = 4.5;
+      t.nextIdx = (t.nextIdx + (t.dir === 1 ? 1 : 3)) % 4;
+      if (player.onTrain === t) AudioSys.blip(880, 0.15, 0.12);
+    }
+  }
+}
+function tryBoardTrain() {
+  if (player.car) return false;
+  for (let i = 0; i < 4; i++) {
+    const e = stationEntrances[i];
+    if (dist2(player.x, player.y, e.x, e.y) > 60 * 60) continue;
+    for (const t of trains) {
+      if (t.dwell > 0 && t.stationIdx === i) {
+        player.onTrain = t;
+        showMsg('Качи се на метрото. Слез на спирка с ' + (IS_TOUCH ? '🚗' : 'E') + '.', 3);
+        AudioSys.pickup();
+        return true;
+      }
+    }
+    showMsg('Изчакай влака на спирката.', 1.5);
+    return true;
+  }
+  return false;
+}
+function trainHeadPos(t) {
+  return ringPoint(t.s);
+}
+
+// Първоначално зареждане
+genCityMap(0);
+playerToStart();
+spawnWorld();
 
 // ---------------- Частици и следи ----------------
 function spawnParticles(x, y, n, opts) {
@@ -951,9 +1093,29 @@ function updatePlayer(dt, inp) {
     return;
   }
 
+  // Возене на метрото
+  if (player.onTrain) {
+    const t = player.onTrain;
+    const g = trainHeadPos(t);
+    player.x = g.x; player.y = g.y;
+    player.angle = g.a + (t.dir === -1 ? Math.PI : 0);
+    if (actionPressed) {
+      actionPressed = false;
+      if (t.dwell > 0 && t.stationIdx >= 0) {
+        const e = stationEntrances[t.stationIdx];
+        player.onTrain = null;
+        player.x = e.x; player.y = e.y;
+        showMsg('Слезе на спирката.', 1.5);
+      } else showMsg('Изчакай следващата спирка.', 1.5);
+    }
+    AudioSys.engine(0, false);
+    return;
+  }
+
   if (actionPressed) {
     actionPressed = false;
-    if (player.car) exitCar(); else tryEnterCar();
+    if (player.car) exitCar();
+    else if (!tryBoardTrain()) tryEnterCar();
   }
 
   if (player.car) updatePlayerCar(dt, inp, player.car);
@@ -1168,7 +1330,7 @@ function updatePoliceCar(c, dt) {
     FX.sparks((c.x + player.car.x) / 2, (c.y + player.car.y) / 2);
     AudioSys.hit();
   }
-  if (!player.car && !player.dead && dist2(c.x, c.y, player.x, player.y) < 22 * 22 && Math.abs(c.speed) > 60) {
+  if (!player.car && !player.onTrain && !player.dead && dist2(c.x, c.y, player.x, player.y) < 22 * 22 && Math.abs(c.speed) > 60) {
     damagePlayer(35);
     c.speed *= 0.7;
   }
@@ -1222,7 +1384,7 @@ function updateCopPed(p, dt) {
     const pos = collideCircle(nx, ny, 7);
     p.x = pos.x; p.y = pos.y;
     p.arrestT = 0;
-  } else if (!player.car) {
+  } else if (!player.car && !player.onTrain) {
     // Арест — ако ченгето те държи близо
     p.arrestT += dt;
     if (p.arrestT > 0.7) { bustPlayer(); p.arrestT = 0; }
@@ -1263,7 +1425,7 @@ function updateProjectiles(dt) {
         }
       }
     }
-    if (!gone && b.police && !player.car && !player.dead) {
+    if (!gone && b.police && !player.car && !player.onTrain && !player.dead) {
       if (dist2(player.x, player.y, b.x, b.y) < 12 * 12) { damagePlayer(b.dmg); gone = true; }
     }
     if (gone) {
@@ -1309,7 +1471,7 @@ function recycle(dt) {
   let liveCars = 0, livePeds = 0;
   for (const c of cars) if (!c.dead && c.kind !== 'police') liveCars++;
   for (const p of peds) if (!p.dead && !p.cop) livePeds++;
-  if (liveCars < 30 && R() < dt * 2.5) {
+  if (liveCars < 36 && R() < dt * 3) {
     const s = randomRoadSpot();
     if (s) {
       const d = dist2(s.x, s.y, player.x, player.y);
@@ -1338,16 +1500,31 @@ function nightAmount() {
   const phase = (gameT % DAY_LENGTH) / DAY_LENGTH;
   return clamp(Math.sin(phase * Math.PI * 2 - Math.PI / 2) * 0.5 + 0.5, 0, 1);
 }
+function switchCity() {
+  genCityMap((cityIdx + 1) % THEMES.length);
+  player.car = null; player.onTrain = null;
+  player.heat = 0; recalcWanted();
+  mission.active = false; mission.target = null; mission.checkpoints = [];
+  mission.cooldown = 6;
+  frenzy.active = false;
+  gour.count = 0;
+  playerToStart();
+  spawnWorld();
+  showMsg('Добре дошъл в ' + theme.name + '!', 5);
+}
 function restartGame() {
   score = 0; mult = 1; lives = 4; level = 1;
   targetScore = 60000; missionsDone = 0;
-  gameOver = false;
+  gameOver = false; citySwitchPending = false;
   player.hp = 100; player.armor = 0; player.dead = false; player.busted = false;
+  player.car = null; player.onTrain = null;
   player.heat = 0; recalcWanted();
   player.ammo = [-1, 30, 0, 0, 0]; player.weapon = 1;
-  player.x = hospitalDoor.x; player.y = hospitalDoor.y;
-  if (mission.active) endMission(false);
+  mission.active = false; mission.target = null; mission.checkpoints = [];
   mission.cooldown = 3;
+  genCityMap(0);
+  playerToStart();
+  spawnWorld();
 }
 
 // ---------------- Рендер ----------------
@@ -1368,12 +1545,12 @@ function drawGround() {
       const h = hash2(tx, ty);
       let fill;
       switch (t) {
-        case T.ROAD: fill = h < 0.5 ? '#3a3a40' : '#3d3d43'; break;
-        case T.SIDE: fill = h < 0.5 ? '#95959c' : '#9a9aa1'; break;
+        case T.ROAD: fill = h < 0.5 ? theme.road[0] : theme.road[1]; break;
+        case T.SIDE: fill = h < 0.5 ? theme.side[0] : theme.side[1]; break;
         case T.BUILD: fill = '#2c2c30'; break; // под сградата — тъмна основа
-        case T.WATER: fill = '#173352'; break;
-        case T.PARK: fill = h < 0.5 ? '#3e6b3a' : '#42703e'; break;
-        default: fill = '#4c6b46';
+        case T.WATER: fill = theme.water; break;
+        case T.PARK: fill = h < 0.5 ? theme.park[0] : theme.park[1]; break;
+        default: fill = theme.grass;
       }
       ctx.fillStyle = fill;
       ctx.fillRect(s.x, s.y, sz, sz);
@@ -1383,7 +1560,7 @@ function drawGround() {
         const my = ty % BLOCK, mx = tx % BLOCK;
         if (!inter) {
           // Осева линия
-          ctx.fillStyle = '#c9b23c';
+          ctx.fillStyle = theme.lane;
           if (my === 4 && isRoadRow(ty)) {
             for (let k = 0; k < 2; k++) ctx.fillRect(s.x + (5 + k * 26) * camZoom, s.y - 1 * camZoom, 9 * camZoom, 2 * camZoom);
           } else if (mx === 4 && isRoadCol(tx)) {
@@ -1699,7 +1876,7 @@ function drawPed(p) {
 }
 
 function drawPlayer() {
-  if (player.car || player.dead || player.busted) return;
+  if (player.car || player.onTrain || player.dead || player.busted) return;
   const s = worldToScreen(player.x, player.y);
   ctx.save();
   ctx.translate(s.x, s.y);
@@ -1858,10 +2035,10 @@ function drawBuildings() {
     if (key === hospitalBlock && hh > 0.9) { /* центърът се маркира по-долу */ }
   }
 
-  // Знаци на специалните сгради (в центъра на блока)
-  drawBlockLabel(hospitalBlock, '#e04545', '➕');
-  drawBlockLabel(policeBlock, '#e8e8f0', '🛡');
-  drawBlockLabel(resprayBlock, '#50b4ff', '🎨');
+  // Знаци на специалните сгради (над входовете им)
+  drawDoorLabel(hospitalDoor, '#e04545', '➕', 'БОЛНИЦА');
+  drawDoorLabel(policeDoor, '#8ab6e8', '🛡', 'УЧАСТЪК');
+  drawDoorLabel(resprayDoor, '#50b4ff', '🎨', 'БОЯДЖИЙНИЦА');
 
   // Дървета в парковете — леко проектирани (над колите/пешеходците)
   for (let ty = minTy; ty <= maxTy; ty++) {
@@ -1876,29 +2053,171 @@ function drawBuildings() {
       // Сянка + ствол + корона
       ctx.fillStyle = 'rgba(0,0,0,0.25)';
       ctx.beginPath(); ctx.arc(s.x + 3 * camZoom, s.y + 3 * camZoom, 9 * camZoom, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = '#5a4632';
-      ctx.lineWidth = 3 * camZoom;
-      ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(topX, topY); ctx.stroke();
-      ctx.fillStyle = '#2c4f28';
-      ctx.beginPath(); ctx.arc(topX, topY, 11 * camZoom, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#3a6534';
-      ctx.beginPath(); ctx.arc(topX - 2.5 * camZoom, topY - 2.5 * camZoom, 7.5 * camZoom, 0, Math.PI * 2); ctx.fill();
+      if (theme.palm) {
+        // Палма — тънък извит ствол и ветрилни листа
+        ctx.strokeStyle = '#8a6a42';
+        ctx.lineWidth = 2.2 * camZoom;
+        ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.quadraticCurveTo((s.x + topX) / 2 + 4 * camZoom, (s.y + topY) / 2, topX, topY); ctx.stroke();
+        ctx.strokeStyle = '#3a7a34';
+        ctx.lineWidth = 2.4 * camZoom;
+        for (let fr = 0; fr < 6; fr++) {
+          const fa = fr * Math.PI / 3 + hash2(tx, ty) * 2;
+          const fx = topX + Math.cos(fa) * 11 * camZoom, fy = topY + Math.sin(fa) * 11 * camZoom;
+          ctx.beginPath();
+          ctx.moveTo(topX, topY);
+          ctx.quadraticCurveTo(topX + Math.cos(fa) * 7 * camZoom, topY + Math.sin(fa) * 7 * camZoom - 3 * camZoom, fx, fy + 2.5 * camZoom);
+          ctx.stroke();
+        }
+        ctx.fillStyle = '#2c5a28';
+        ctx.beginPath(); ctx.arc(topX, topY, 3 * camZoom, 0, Math.PI * 2); ctx.fill();
+      } else {
+        ctx.strokeStyle = '#5a4632';
+        ctx.lineWidth = 3 * camZoom;
+        ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(topX, topY); ctx.stroke();
+        ctx.fillStyle = '#2c4f28';
+        ctx.beginPath(); ctx.arc(topX, topY, 11 * camZoom, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#3a6534';
+        ctx.beginPath(); ctx.arc(topX - 2.5 * camZoom, topY - 2.5 * camZoom, 7.5 * camZoom, 0, Math.PI * 2); ctx.fill();
+      }
     }
   }
 }
-function drawBlockLabel(key, color, icon) {
-  const [bx, by] = key.split(',').map(Number);
-  const wx = (bx * BLOCK + BLOCK / 2) * TILE, wy = (by * BLOCK + BLOCK / 2) * TILE;
+// Надземното метро: колони, релси, спирки и влакове (проектирани на височина)
+function elevPt(wx, wy) {
   const s = worldToScreen(wx, wy);
+  return { x: s.x + (s.x - VW / 2) * METRO.f, y: s.y + (s.y - VH / 2) * METRO.f, g: s };
+}
+function drawMetro() {
+  const { xL, xR, yT, yB } = METRO;
+  const corners = [[xL, yT], [xR, yT], [xR, yB], [xL, yB]];
+  const margin = 260;
+  // Колони на всеки 3 плочки по видимите сегменти
+  ctx.lineCap = 'round';
+  for (let e = 0; e < 4; e++) {
+    const [ax, ay] = corners[e], [bx, by] = corners[(e + 1) % 4];
+    const len = Math.hypot(bx - ax, by - ay);
+    const steps = Math.round(len / (TILE * 3));
+    for (let i = 0; i <= steps; i++) {
+      const wx = ax + (bx - ax) * i / steps, wy = ay + (by - ay) * i / steps;
+      const p = elevPt(wx, wy);
+      if (p.g.x < -margin || p.g.y < -margin || p.g.x > VW + margin || p.g.y > VH + margin) continue;
+      ctx.strokeStyle = '#3e3e46';
+      ctx.lineWidth = 5 * camZoom;
+      ctx.beginPath(); ctx.moveTo(p.g.x, p.g.y); ctx.lineTo(p.x, p.y); ctx.stroke();
+      ctx.fillStyle = 'rgba(0,0,0,0.25)';
+      ctx.beginPath(); ctx.ellipse(p.g.x, p.g.y, 6 * camZoom, 3.5 * camZoom, 0, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  // Релсово платно (затворен контур през проектираните ъгли)
+  const ep = corners.map(c => elevPt(c[0], c[1]));
+  ctx.beginPath();
+  ctx.moveTo(ep[0].x, ep[0].y);
+  for (let i = 1; i < 4; i++) ctx.lineTo(ep[i].x, ep[i].y);
+  ctx.closePath();
+  ctx.strokeStyle = '#33333a';
+  ctx.lineWidth = 15 * camZoom;
+  ctx.stroke();
+  ctx.strokeStyle = '#4a4a52';
+  ctx.lineWidth = 11 * camZoom;
+  ctx.stroke();
+  ctx.setLineDash([2 * camZoom, 7 * camZoom]);
+  ctx.strokeStyle = '#8a8a92';
+  ctx.lineWidth = 7 * camZoom;
+  ctx.stroke();
+  ctx.setLineDash([]);
+  // Спирки: перон + знак Ⓜ на входа
+  for (let i = 0; i < 4; i++) {
+    const sp = ringPoint(METRO.stationS[i]);
+    const p = elevPt(sp.x, sp.y);
+    if (p.g.x > -margin && p.g.y > -margin && p.g.x < VW + margin && p.g.y < VH + margin) {
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(sp.a);
+      ctx.fillStyle = '#71717c';
+      ctx.fillRect(-46 * camZoom, -15 * camZoom, 92 * camZoom, 30 * camZoom);
+      ctx.fillStyle = '#c9b23c';
+      ctx.fillRect(-46 * camZoom, -15 * camZoom, 92 * camZoom, 2.5 * camZoom);
+      ctx.fillRect(-46 * camZoom, 12.5 * camZoom, 92 * camZoom, 2.5 * camZoom);
+      ctx.restore();
+      // Знак на входа долу
+      const e = stationEntrances[i];
+      const es = worldToScreen(e.x, e.y);
+      ctx.fillStyle = '#1d4d7a';
+      ctx.beginPath(); ctx.arc(es.x, es.y, 9 * camZoom, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold ' + Math.round(11 * camZoom) + 'px sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('М', es.x, es.y + 0.5);
+      // Подсказка, когато влак чака на спирката
+      for (const t of trains) {
+        if (t.dwell > 0 && t.stationIdx === i && !player.car && !player.onTrain &&
+            dist2(player.x, player.y, e.x, e.y) < 120 * 120) {
+          ctx.fillStyle = '#7ee08a';
+          ctx.font = 'bold ' + Math.round(11 * camZoom) + 'px sans-serif';
+          ctx.fillText(IS_TOUCH ? '🚗 качи се' : 'E: качи се', es.x, es.y - 18 * camZoom);
+        }
+      }
+    }
+  }
+  // Влакове
+  for (const t of trains) {
+    for (let i = 0; i < METRO.carsPerTrain; i++) {
+      const s = t.s - t.dir * i * (METRO.carLen + METRO.carGap);
+      const rp = ringPoint(s);
+      const p = elevPt(rp.x, rp.y);
+      if (p.g.x < -margin || p.g.y < -margin || p.g.x > VW + margin || p.g.y > VH + margin) continue;
+      // Сянка на земята
+      ctx.fillStyle = 'rgba(0,0,0,0.22)';
+      ctx.save();
+      ctx.translate(p.g.x, p.g.y);
+      ctx.rotate(rp.a);
+      ctx.fillRect(-METRO.carLen / 2 * camZoom, -8 * camZoom, METRO.carLen * camZoom, 16 * camZoom);
+      ctx.restore();
+      // Вагон
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(rp.a + (t.dir === -1 ? Math.PI : 0));
+      ctx.scale(camZoom, camZoom);
+      const L = METRO.carLen, W = 18;
+      ctx.fillStyle = theme.metro;
+      ctx.beginPath();
+      const r = 6;
+      ctx.moveTo(-L / 2 + r, -W / 2);
+      ctx.lineTo(L / 2 - r, -W / 2); ctx.quadraticCurveTo(L / 2, -W / 2, L / 2, -W / 2 + r);
+      ctx.lineTo(L / 2, W / 2 - r); ctx.quadraticCurveTo(L / 2, W / 2, L / 2 - r, W / 2);
+      ctx.lineTo(-L / 2 + r, W / 2); ctx.quadraticCurveTo(-L / 2, W / 2, -L / 2, W / 2 - r);
+      ctx.lineTo(-L / 2, -W / 2 + r); ctx.quadraticCurveTo(-L / 2, -W / 2, -L / 2 + r, -W / 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.2)';
+      ctx.fillRect(-L / 2 + 2, -W / 2 + 1.5, L - 4, 2.5);
+      // Прозорци
+      ctx.fillStyle = 'rgba(190,225,245,0.9)';
+      for (let k = 0; k < 4; k++) {
+        ctx.fillRect(-L / 2 + 6 + k * (L - 10) / 4, -W / 2 + 4, (L - 14) / 4 - 3, 3.5);
+        ctx.fillRect(-L / 2 + 6 + k * (L - 10) / 4, W / 2 - 7.5, (L - 14) / 4 - 3, 3.5);
+      }
+      // Фар на първия вагон
+      if (i === 0) {
+        ctx.fillStyle = '#ffe9a0';
+        ctx.fillRect(L / 2 - 2.5, -3, 2.5, 6);
+      }
+      ctx.restore();
+    }
+  }
+}
+function drawDoorLabel(door, color, icon, label) {
+  if (!door) return;
+  const s = worldToScreen(door.x, door.y);
   if (s.x < -100 || s.y < -100 || s.x > VW + 100 || s.y > VH + 100) return;
-  const cX = VW / 2, cY = VH / 2;
-  const h = blockHeight[key] || 2;
-  const f = 0.035 * h;
-  const px = s.x + (s.x - cX) * f, py = s.y + (s.y - cY) * f;
-  ctx.font = 'bold ' + Math.round(26 * camZoom) + 'px sans-serif';
+  ctx.font = 'bold ' + Math.round(15 * camZoom) + 'px sans-serif';
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillStyle = color;
-  ctx.fillText(icon, px, py);
+  ctx.fillText(icon, s.x, s.y - 14 * camZoom);
+  ctx.font = 'bold ' + Math.round(8 * camZoom) + 'px sans-serif';
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  ctx.fillText(label, s.x, s.y - 28 * camZoom);
 }
 
 function drawMissionMarkers() {
@@ -1942,19 +2261,7 @@ function drawMissionMarkers() {
   }
 }
 
-// Минимапа
-const miniCanvas = document.createElement('canvas');
-(function renderMini() {
-  miniCanvas.width = MW; miniCanvas.height = MH;
-  const mc = miniCanvas.getContext('2d');
-  for (let y = 0; y < MH; y++) {
-    for (let x = 0; x < MW; x++) {
-      const t = map[y * MW + x];
-      mc.fillStyle = t === T.ROAD ? '#54545a' : t === T.WATER ? '#173352' : t === T.BUILD ? '#8a7666' : t === T.PARK ? '#3e6b3a' : '#84848a';
-      mc.fillRect(x, y, 1, 1);
-    }
-  }
-})();
+// Минимапа (miniCanvas се рендерира в renderMini при смяна на град)
 function drawMiniMap() {
   const size = clamp(Math.min(VW, VH) * 0.22, 90, 150);
   const pad = 10;
@@ -1965,6 +2272,15 @@ function drawMiniMap() {
   ctx.fillRect(x0 - 2, y0 - 2, size + 4, size + 4);
   ctx.drawImage(miniCanvas, x0, y0, size, size);
   const sx = size / (MW * TILE), sy = size / (MH * TILE);
+  // Линия на метрото
+  ctx.strokeStyle = 'rgba(230,200,80,0.8)';
+  ctx.lineWidth = 1.2;
+  ctx.strokeRect(x0 + METRO.xL * sx, y0 + METRO.yT * sy, (METRO.xR - METRO.xL) * sx, (METRO.yB - METRO.yT) * sy);
+  ctx.fillStyle = '#e8e8f0';
+  for (const ss of METRO.stationS) {
+    const p = ringPoint(ss);
+    ctx.fillRect(x0 + p.x * sx - 1.5, y0 + p.y * sy - 1.5, 3, 3);
+  }
   // Специални места
   ctx.fillStyle = '#e04545';
   ctx.fillRect(x0 + hospitalDoor.x * sx - 1.5, y0 + hospitalDoor.y * sy - 1.5, 3, 3);
@@ -2077,7 +2393,13 @@ function drawHUD() {
   if (player.car) {
     ctx.fillStyle = '#aac';
     ctx.fillText(player.car.name + ' ▮' + Math.max(0, Math.ceil(player.car.hp / player.car.maxHp * 100)) + '%', pad, pad + 62);
+  } else if (player.onTrain) {
+    ctx.fillStyle = '#aac';
+    ctx.fillText('Метро', pad, pad + 62);
   }
+  ctx.font = '12px monospace';
+  ctx.fillStyle = 'rgba(255,255,255,0.55)';
+  ctx.fillText(theme.name + ' · ниво ' + level, pad, pad + 80);
 
   // === Дясно: издирване под минимапата ===
   const mini = { x0: VW - clamp(Math.min(VW, VH) * 0.22, 90, 150) - 10, y0: 10, size: clamp(Math.min(VW, VH) * 0.22, 90, 150) };
@@ -2134,11 +2456,11 @@ function drawHUD() {
     bigCenterText('АРЕСТУВАН!', '#7ab6ff');
   }
   if (levelCompleteT > 0) {
-    bigCenterText('ГРАД ' + (level - 1) + ' ЗАВЪРШЕН!', '#ffd23c');
+    bigCenterText('ГРАДЪТ Е ТВОЙ!', '#ffd23c');
     ctx.font = 'bold 18px sans-serif';
     ctx.textAlign = 'center';
     ctx.fillStyle = '#fff';
-    ctx.fillText('Нова цел: ' + fmtMoney(targetScore) + ' · +1 живот', VW / 2, VH / 2 + 44);
+    ctx.fillText('Заминаваш за ' + travelToName + ' · Нова цел: ' + fmtMoney(targetScore) + ' · +1 живот', VW / 2, VH / 2 + 44);
   }
   if (gameOver) {
     ctx.fillStyle = 'rgba(0,0,0,0.75)';
@@ -2202,12 +2524,16 @@ function drawStartScreen() {
   ctx.textBaseline = 'middle';
   ctx.font = 'bold ' + Math.min(64, VW * 0.1) + 'px sans-serif';
   ctx.fillStyle = '#ffd23c';
-  ctx.fillText('GANG CITY', VW / 2, VH * 0.24);
+  ctx.fillText('GANG CITY', VW / 2, VH * 0.22);
+  ctx.font = 'bold 17px sans-serif';
+  ctx.fillStyle = '#7ab6ff';
+  ctx.fillText('Град 1: ' + THEMES[0].name + ' → ' + THEMES[1].name + ' → ' + THEMES[2].name, VW / 2, VH * 0.31);
   ctx.font = '15px sans-serif';
   ctx.fillStyle = '#ccc';
   const lines = IS_TOUCH ? [
     'Събери ' + fmtMoney(targetScore) + ', за да превземеш града!',
     'Отговаряй на звънящите телефони ☎ за работа от шефа.',
+    'Метрото Ⓜ те превозва бързо — качи се от спирка.',
     '',
     'Ляв палец — движение / волан',
     '🚗 влез/излез · 🔫 стрелба · 🛑 спирачка/дрифт · 🔁 оръжие',
@@ -2217,6 +2543,7 @@ function drawStartScreen() {
   ] : [
     'Събери ' + fmtMoney(targetScore) + ', за да превземеш града!',
     'Отговаряй на звънящите телефони ☎ за работа от шефа.',
+    'Метрото Ⓜ те превозва бързо — качи се от спирка.',
     '',
     'WASD / стрелки — движение и шофиране',
     'E — влез/излез · F — стрелба · Q — оръжие · Space — спирачка/дрифт · P — пауза',
@@ -2245,7 +2572,13 @@ function frame(now) {
   if (!paused && !gameOver) {
     gameT += dt;
     if (messageT > 0) messageT -= dt;
-    if (levelCompleteT > 0) levelCompleteT -= dt;
+    if (levelCompleteT > 0) {
+      levelCompleteT -= dt;
+      if (citySwitchPending && levelCompleteT <= 0) {
+        citySwitchPending = false;
+        switchCity();
+      }
+    }
 
     const inp = inputState();
     updatePlayer(dt, inp);
@@ -2258,6 +2591,7 @@ function frame(now) {
     updateMission(dt);
     updateFrenzy(dt);
     updateRespray(dt);
+    updateMetro(dt);
     recycle(dt);
 
     // Сирена — ако наблизо гони патрулка
@@ -2276,7 +2610,7 @@ function frame(now) {
 
     // Камера — по-силен зуум навън при скорост (както в класиката)
     const spd = player.car ? Math.abs(player.car.speed) : 0;
-    const targetZoom = player.car ? clamp(1.12 - spd / 620, 0.62, 1.05) : 1.15;
+    const targetZoom = player.onTrain ? 0.78 : player.car ? clamp(1.12 - spd / 620, 0.62, 1.05) : 1.15;
     camZoom += (targetZoom - camZoom) * dt * 1.8;
     const lookAhead = player.car ? clamp(player.car.speed * 0.4, -150, 150) : 0;
     const txp = player.x + Math.cos(player.angle) * lookAhead;
@@ -2298,6 +2632,7 @@ function frame(now) {
   drawParticles();
   drawMissionMarkers();
   drawBuildings();          // сградите закриват всичко зад тях (както в класиката)
+  drawMetro();              // метрото е над всичко — то е надземна линия
 
   const night = nightAmount();
   if (night > 0.02) {
@@ -2309,3 +2644,16 @@ function frame(now) {
   drawHUD();
 }
 requestAnimationFrame(frame);
+
+// Дебъг интерфейс за автоматизирани тестове (не влияе на играта)
+window.__gc = {
+  get player() { return player; },
+  get trains() { return trains; },
+  get stationEntrances() { return stationEntrances; },
+  get themeName() { return theme.name; },
+  get cars() { return cars; },
+  get score() { return score; },
+  teleport(x, y) { player.x = x; player.y = y; camX = x; camY = y; },
+  cheatScore(n) { addScore(n); },
+  forceStart() { started = true; }
+};
