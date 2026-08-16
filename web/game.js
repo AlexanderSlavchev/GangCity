@@ -121,15 +121,28 @@ function tileAt(tx, ty) {
 function tileAtPx(x, y) { return tileAt(Math.floor(x / TILE), Math.floor(y / TILE)); }
 function blockKeyOf(tx, ty) { return Math.floor(tx / BLOCK) + ',' + Math.floor(ty / BLOCK); }
 
-// Градове (както в класиката: Либърти → Сан Андреас → Вайс Сити)
+// Градове: София (по действителния център) + класическата тройка
 const THEMES = [
+  {
+    name: 'София',
+    sofia: true,
+    walls: ['#d9c9a9', '#e6dcc6', '#c9b998', '#b3a890', '#d3c3b3', '#e2d2ba', '#cfc0a4', '#bfae94'],
+    roofs: ['#9a5f48', '#a86a50', '#8a6a55', '#7a7068', '#96604a'],
+    road: ['#3c3c42', '#3f3f45'], side: ['#aaa294', '#afa799'],
+    park: ['#42703c', '#467440'], water: '#2a5a74', grass: '#5c7448',
+    lane: '#d8d4c8', parkChance: 0.18, palm: false, metro: '#2a6db5',
+    stations: ['Лъвов мост', 'СУ Кл. Охридски', 'НДК', 'Опълченска'],
+    streetsH: ['ул. Козлодуй', 'бул. Сливница', 'бул. Тодор Александров', 'бул. Цар Освободител', 'ул. Граф Игнатиев', 'бул. Патриарх Евтимий', 'бул. България', 'бул. Гоце Делчев'],
+    streetsV: ['бул. К. Величков', 'бул. Опълченска', 'бул. Мария Луиза', 'бул. Витоша', 'ул. Г. С. Раковски', 'бул. Васил Левски', 'бул. Евлоги Георгиев', 'бул. Цариградско шосе']
+  },
   {
     name: 'Либърти Сити',
     walls: ['#9a7b64', '#8b8d99', '#ab9070', '#7d8c78', '#997f9e', '#b09a80', '#82909f', '#a58474', '#c0aa8a', '#6f7f8f'],
     roofs: ['#6e6a66', '#7a7672', '#5f6468', '#746e64', '#686e62', '#7e7468'],
     road: ['#3a3a40', '#3d3d43'], side: ['#95959c', '#9a9aa1'],
     park: ['#3e6b3a', '#42703e'], water: '#173352', grass: '#4c6b46',
-    lane: '#c9b23c', parkChance: 0.16, palm: false, metro: '#3a6ea8'
+    lane: '#c9b23c', parkChance: 0.16, palm: false, metro: '#3a6ea8',
+    stations: ['Север', 'Изток', 'Юг', 'Запад']
   },
   {
     name: 'Сан Андреас',
@@ -137,7 +150,8 @@ const THEMES = [
     roofs: ['#a89078', '#98a088', '#b0a080', '#8a9aa4', '#a4988a', '#9aa48a'],
     road: ['#46464c', '#49494f'], side: ['#b2aa9a', '#b7afa0'],
     park: ['#5c7c3c', '#617f40'], water: '#1d5a78', grass: '#6c7c48',
-    lane: '#e8e4d8', parkChance: 0.22, palm: true, metro: '#c03830'
+    lane: '#e8e4d8', parkChance: 0.22, palm: true, metro: '#c03830',
+    stations: ['Север', 'Изток', 'Юг', 'Запад']
   },
   {
     name: 'Вайс Сити',
@@ -145,9 +159,15 @@ const THEMES = [
     roofs: ['#95788a', '#7a8a92', '#a08a92', '#8a927a', '#928a9a'],
     road: ['#3e3a42', '#413d45'], side: ['#c2b2a2', '#c7b7a7'],
     park: ['#4a7a4c', '#4e7e50'], water: '#0e6080', grass: '#5c7a52',
-    lane: '#f0c0d0', parkChance: 0.2, palm: true, metro: '#20a8a0'
+    lane: '#f0c0d0', parkChance: 0.2, palm: true, metro: '#20a8a0',
+    stations: ['Север', 'Изток', 'Юг', 'Запад']
   }
 ];
+// София: специални слоеве на картата
+let yellowRoad = null;   // жълтите павета
+let pedRoad = null;      // пешеходната зона на Витоша
+let lmMap = null;        // коя плочка на коя забележителност принадлежи
+let landmarks = [];      // забележителности с custom рисуване
 let cityIdx = 0;
 let theme = THEMES[0];
 let hospitalDoor = null, policeDoor = null, resprayDoor = null;
@@ -169,11 +189,16 @@ function genCityMap(idx) {
       blockHeight[key] = 1 + Math.floor(rnd() * 3); // 1..3 етажни групи
     }
   }
-  // Специални блокове близо до центъра (болница, участък, бояджийница)
+  // Специални блокове (болница, участък, бояджийница)
   const cb = Math.floor(MW / BLOCK / 2);
-  hospitalBlock = (cb - 1) + ',' + cb;
-  policeBlock = (cb + 1) + ',' + (cb - 1);
-  resprayBlock = cb + ',' + (cb + 1);
+  if (theme.sofia) {
+    // Встрани от забележителностите в центъра
+    hospitalBlock = '2,2'; policeBlock = '5,1'; resprayBlock = '2,5';
+  } else {
+    hospitalBlock = (cb - 1) + ',' + cb;
+    policeBlock = (cb + 1) + ',' + (cb - 1);
+    resprayBlock = cb + ',' + (cb + 1);
+  }
   for (const k of [hospitalBlock, policeBlock, resprayBlock]) {
     blockType[k] = 'build'; blockHeight[k] = 2;
   }
@@ -197,6 +222,59 @@ function genCityMap(idx) {
         }
       }
       map[y * MW + x] = t;
+    }
+  }
+
+  // София: река, жълти павета, пешеходна зона и забележителности
+  yellowRoad = null; pedRoad = null; lmMap = null; landmarks = [];
+  if (theme.sofia) {
+    yellowRoad = new Uint8Array(MW * MH);
+    pedRoad = new Uint8Array(MW * MH);
+    lmMap = new Int16Array(MW * MH).fill(-1);
+
+    // Река Перловска (север–юг) с мостове на булевардите
+    for (let y = 2; y < MH - 2; y++) {
+      if (isRoadRow(y)) continue; // мост
+      map[y * MW + 54] = T.WATER;
+      map[y * MW + 55] = T.WATER;
+    }
+
+    const mark = (x0, y0, x1, y1, id) => {
+      for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+        map[y * MW + x] = T.BUILD;
+        lmMap[y * MW + x] = id;
+      }
+    };
+    const park = (x0, y0, x1, y1) => {
+      for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+        const t = map[y * MW + x];
+        if (t !== T.ROAD && t !== T.WATER) map[y * MW + x] = T.PARK;
+      }
+    };
+    // Катедралата със златните куполи
+    landmarks.push({ type: 'nevski', x: 40 * TILE, y: 24 * TILE, h: 2, wall: '#eae6dc', roof: '#d9d4c6' });
+    mark(38, 22, 41, 25, 0);
+    // Университетът (Ректоратът)
+    landmarks.push({ type: 'su', x: 48 * TILE, y: 32 * TILE, h: 2, wall: '#c8a058', roof: '#7a3830' });
+    mark(46, 30, 49, 33, 1);
+    // НДК с парка пред него
+    park(27, 44, 36, 52);
+    landmarks.push({ type: 'ndk', x: 32 * TILE, y: 48 * TILE, h: 2, wall: '#dcd8cc', roof: '#cac6ba' });
+    mark(30, 46, 33, 49, 2);
+    // Градската градина с фонтана
+    park(30, 29, 34, 31);
+    landmarks.push({ type: 'fountain', x: 32.5 * TILE, y: 30.5 * TILE, h: 0 });
+    // Стадионът в парка
+    park(45, 37, 50, 42);
+    landmarks.push({ type: 'stadium', x: 48 * TILE, y: 40 * TILE, h: 0 });
+
+    // Пешеходната зона на бул. Витоша
+    for (let y = 29; y <= 42; y++) { pedRoad[y * MW + 27] = 1; pedRoad[y * MW + 28] = 1; }
+    // Жълтите павета около Ларгото и Царя
+    for (let y = 20; y <= 33; y++) {
+      for (let x = 24; x <= 45; x++) {
+        if (map[y * MW + x] === T.ROAD && !pedRoad[y * MW + x]) yellowRoad[y * MW + x] = 1;
+      }
     }
   }
 
@@ -233,7 +311,9 @@ function renderMini() {
   for (let y = 0; y < MH; y++) {
     for (let x = 0; x < MW; x++) {
       const t = map[y * MW + x];
-      mc.fillStyle = t === T.ROAD ? '#54545a' : t === T.WATER ? theme.water : t === T.BUILD ? '#8a7666' : t === T.PARK ? theme.park[0] : '#84848a';
+      mc.fillStyle = t === T.ROAD
+        ? (yellowRoad && yellowRoad[y * MW + x] ? '#ab8f3e' : (pedRoad && pedRoad[y * MW + x] ? '#a09578' : '#54545a'))
+        : t === T.WATER ? theme.water : t === T.BUILD ? (lmMap && lmMap[y * MW + x] >= 0 ? '#c8bfa8' : '#8a7666') : t === T.PARK ? theme.park[0] : '#84848a';
       mc.fillRect(x, y, 1, 1);
     }
   }
@@ -268,6 +348,7 @@ function randomRoadSpot() {
     const tx = 2 + Math.floor(R() * (MW - 4));
     const ty = 2 + Math.floor(R() * (MH - 4));
     if (tileAt(tx, ty) !== T.ROAD) continue;
+    if (pedRoad && pedRoad[ty * MW + tx]) continue; // пешеходна зона — без коли
     const onH = isRoadRow(ty), onV = isRoadCol(tx);
     if (onH && onV) continue;
     let dir;
@@ -276,6 +357,13 @@ function randomRoadSpot() {
     return { x: tx * TILE + TILE / 2, y: ty * TILE + TILE / 2, dir };
   }
   return null;
+}
+function dirRoadOk(tx, ty, dir) {
+  const dx = [1, 0, -1, 0][dir], dy = [0, 1, 0, -1][dir];
+  const nx = tx + dx * 3, ny = ty + dy * 3;
+  if (tileAt(nx, ny) !== T.ROAD) return false;
+  if (pedRoad && pedRoad[ny * MW + nx]) return false;
+  return true;
 }
 function laneCenterFor(dir, x, y) {
   const tx = Math.floor(x / TILE), ty = Math.floor(y / TILE);
@@ -492,6 +580,13 @@ function spawnWorld() {
     const t = tileAt(tx, ty);
     if (t === T.SIDE || t === T.PARK) peds.push(makePed(tx * TILE + TILE / 2, ty * TILE + TILE / 2));
   }
+  // Пешеходната Витоша е пълна с хора
+  if (theme.sofia) {
+    for (let i = 0; i < 16; i++) {
+      const tx = 27 + Math.floor(R() * 2), ty = 29 + Math.floor(R() * 14);
+      peds.push(makePed(tx * TILE + TILE / 2, ty * TILE + TILE / 2));
+    }
+  }
   const PICKS = ['health', 'money', 'pistol', 'mg', 'flame', 'rocket', 'armor'];
   let pl = 0;
   for (let i = 0; i < 700 && pl < 26; i++) {
@@ -574,7 +669,7 @@ function tryBoardTrain() {
     for (const t of trains) {
       if (t.dwell > 0 && t.stationIdx === i) {
         player.onTrain = t;
-        showMsg('Качи се на метрото. Слез на спирка с ' + (IS_TOUCH ? '🚗' : 'E') + '.', 3);
+        showMsg('Пътуваш от „' + theme.stations[i] + '“. Слизане с ' + (IS_TOUCH ? '🚗' : 'E') + '.', 3);
         AudioSys.pickup();
         return true;
       }
@@ -1152,9 +1247,10 @@ function updatePlayer(dt, inp) {
       actionPressed = false;
       if (t.dwell > 0 && t.stationIdx >= 0) {
         const e = stationEntrances[t.stationIdx];
+        const stName = theme.stations[t.stationIdx];
         player.onTrain = null;
         player.x = e.x; player.y = e.y;
-        showMsg('Слезе на спирката.', 1.5);
+        showMsg('Слезе на „' + stName + '“.', 2);
       } else showMsg('Изчакай следващата спирка.', 1.5);
     }
     AudioSys.engine(0, false);
@@ -1319,9 +1415,13 @@ function updateCarAI(c, dt) {
     const cx = tx * TILE + TILE / 2, cy = ty * TILE + TILE / 2;
     if (dist2(c.x, c.y, cx, cy) < 14 * 14) {
       c.turned = true;
-      if (R() < 0.45) {
-        const opts = c.dir % 2 === 0 ? [1, 3] : [0, 2];
-        c.dir = opts[Math.floor(R() * 2)];
+      // Избери посока, но само по истински път (не пешеходна зона / река)
+      const opts = c.dir % 2 === 0 ? [1, 3] : [0, 2];
+      const wantTurn = R() < 0.45;
+      const pick = opts[Math.floor(R() * 2)];
+      const order = wantTurn ? [pick, c.dir, opts[0], opts[1]] : [c.dir, pick, opts[0], opts[1]];
+      for (const d of order) {
+        if (dirRoadOk(tx, ty, d)) { c.dir = d; break; }
       }
     }
   }
@@ -1411,7 +1511,8 @@ function updatePed(p, dt) {
   const nx = p.x + Math.cos(p.angle) * spd * dt;
   const ny = p.y + Math.sin(p.angle) * spd * dt;
   const nt = tileAtPx(nx, ny);
-  if (isSolid(nt) || (p.panic <= 0 && nt === T.ROAD)) {
+  const inPedZone = pedRoad && pedRoad[Math.floor(ny / TILE) * MW + Math.floor(nx / TILE)];
+  if (isSolid(nt) || (p.panic <= 0 && nt === T.ROAD && !inPedZone)) {
     p.angle += Math.PI / 2 + R();
     return;
   }
@@ -1680,9 +1781,49 @@ function drawGround() {
       }
 
       if (t === T.ROAD) {
+        const idx = ty * MW + tx;
+        const isYellow = yellowRoad && yellowRoad[idx];
+        const isPed = pedRoad && pedRoad[idx];
         const inter = isRoadRow(ty) && isRoadCol(tx);
         const my = ty % BLOCK, mx = tx % BLOCK;
-        if (!inter) {
+        if (isPed) {
+          // Пешеходната зона на Витоша — светла настилка, плочки, кашпи
+          ctx.fillStyle = '#bdb094';
+          ctx.fillRect(s.x, s.y, sz, sz);
+          ctx.globalAlpha = 0.5;
+          ctx.drawImage(TEX.grain, gsx, gsy, 48, 48, s.x, s.y, sz, sz);
+          ctx.globalAlpha = 1;
+          ctx.strokeStyle = 'rgba(90,75,50,0.16)';
+          ctx.lineWidth = 1;
+          for (let k = 1; k < 4; k++) {
+            ctx.beginPath(); ctx.moveTo(s.x + sz * k / 4, s.y); ctx.lineTo(s.x + sz * k / 4, s.y + sz); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(s.x, s.y + sz * k / 4); ctx.lineTo(s.x + sz, s.y + sz * k / 4); ctx.stroke();
+          }
+          if (h > 0.8) {
+            // Кашпа с храст
+            ctx.fillStyle = '#8a8078';
+            ctx.beginPath(); ctx.arc(s.x + sz / 2, s.y + sz / 2, 7 * camZoom, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#3e6b34';
+            ctx.beginPath(); ctx.arc(s.x + sz / 2, s.y + sz / 2, 5.2 * camZoom, 0, Math.PI * 2); ctx.fill();
+          }
+        } else if (isYellow) {
+          // Жълтите павета
+          ctx.fillStyle = '#c3a04c';
+          ctx.fillRect(s.x, s.y, sz, sz);
+          ctx.globalAlpha = 0.55;
+          ctx.drawImage(TEX.grain, gsx, gsy, 48, 48, s.x, s.y, sz, sz);
+          ctx.globalAlpha = 1;
+          // Мрежа от павета (леко разместена като зидария)
+          ctx.strokeStyle = 'rgba(110,85,30,0.28)';
+          ctx.lineWidth = 1;
+          for (let k = 0; k < 6; k++) {
+            ctx.beginPath(); ctx.moveTo(s.x, s.y + sz * k / 6); ctx.lineTo(s.x + sz, s.y + sz * k / 6); ctx.stroke();
+          }
+          for (let k = 0; k < 6; k++) {
+            const off = (k % 2) * sz / 12;
+            ctx.beginPath(); ctx.moveTo(s.x + sz * k / 6 + off, s.y); ctx.lineTo(s.x + sz * k / 6 + off, s.y + sz); ctx.stroke();
+          }
+        } else if (!inter) {
           // Износване от гуми по лентите
           ctx.fillStyle = 'rgba(0,0,0,0.10)';
           if (isRoadRow(ty)) {
@@ -1721,6 +1862,12 @@ function drawGround() {
             ctx.beginPath(); ctx.arc(s.x + sz / 2, s.y + sz / 2, 5 * camZoom, 0, Math.PI * 2); ctx.fill();
           }
         }
+        // Парапети на мостовете (път, граничещ с вода)
+        ctx.fillStyle = 'rgba(225,228,232,0.85)';
+        if (tileAt(tx, ty - 1) === T.WATER) ctx.fillRect(s.x, s.y, sz, 2.2 * camZoom);
+        if (tileAt(tx, ty + 1) === T.WATER) ctx.fillRect(s.x, s.y + sz - 2.2 * camZoom, sz, 2.2 * camZoom);
+        if (tileAt(tx - 1, ty) === T.WATER) ctx.fillRect(s.x, s.y, 2.2 * camZoom, sz);
+        if (tileAt(tx + 1, ty) === T.WATER) ctx.fillRect(s.x + sz - 2.2 * camZoom, s.y, 2.2 * camZoom, sz);
       } else if (t === T.SIDE) {
         // Бордюр към пътя
         ctx.fillStyle = 'rgba(0,0,0,0.18)';
@@ -2171,6 +2318,14 @@ function drawParticles() {
   ctx.globalAlpha = 1;
 }
 
+// Съседна плочка част ли е от същата сграда (същия блок или същата забележителност)?
+function sameBuildingTile(ntx, nty, key, lmId) {
+  if (tileAt(ntx, nty) !== T.BUILD) return false;
+  const nId = lmMap ? lmMap[nty * MW + ntx] : -1;
+  if (lmId >= 0 || nId >= 0) return lmId === nId;
+  return blockKeyOf(ntx, nty) === key;
+}
+
 // Псевдо-3D сгради — стени + покриви, проектирани от центъра на камерата
 function drawBuildings() {
   const halfW = VW / 2 / camZoom, halfH = VH / 2 / camZoom;
@@ -2191,10 +2346,12 @@ function drawBuildings() {
   for (const tI of tiles) {
     const { tx, ty } = tI;
     const key = blockKeyOf(tx, ty);
-    const h = blockHeight[key] || 1;
+    const lmId = lmMap ? lmMap[ty * MW + tx] : -1;
+    const lm = lmId >= 0 ? landmarks[lmId] : null;
+    const h = lm ? lm.h : (blockHeight[key] || 1);
     const f = 0.035 * h;
-    const wall = blockColor[key] || '#888';
-    const roof = blockRoof[key] || '#6e6a66';
+    const wall = lm ? lm.wall : (blockColor[key] || '#888');
+    const roof = lm ? lm.roof : (blockRoof[key] || '#6e6a66');
 
     // Ъгли на земята (екранни координати)
     const g = [
@@ -2215,7 +2372,7 @@ function drawBuildings() {
     ];
     for (const e of edges) {
       const ntx = tx + e.nx, nty = ty + e.ny;
-      if (tileAt(ntx, nty) === T.BUILD && blockKeyOf(ntx, nty) === key) continue;
+      if (sameBuildingTile(ntx, nty, key, lmId)) continue;
       ctx.fillStyle = shade(wall, e.sh);
       ctx.beginPath();
       ctx.moveTo(g[e.a].x, g[e.a].y);
@@ -2254,7 +2411,7 @@ function drawBuildings() {
     ctx.lineWidth = Math.max(1, 2.2 * camZoom);
     for (const e of edges) {
       const ntx = tx + e.nx, nty = ty + e.ny;
-      if (tileAt(ntx, nty) === T.BUILD && blockKeyOf(ntx, nty) === key) continue;
+      if (sameBuildingTile(ntx, nty, key, lmId)) continue;
       ctx.strokeStyle = 'rgba(0,0,0,0.4)';
       ctx.beginPath();
       ctx.moveTo(rf[e.a].x, rf[e.a].y);
@@ -2419,6 +2576,13 @@ function drawMetro() {
       ctx.font = 'bold ' + Math.round(11 * camZoom) + 'px sans-serif';
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText('М', es.x, es.y + 0.5);
+      // Име на спирката
+      ctx.font = 'bold ' + Math.round(8.5 * camZoom) + 'px sans-serif';
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+      ctx.strokeText(theme.stations[i], es.x, es.y + 17 * camZoom);
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      ctx.fillText(theme.stations[i], es.x, es.y + 17 * camZoom);
       // Подсказка, когато влак чака на спирката
       for (const t of trains) {
         if (t.dwell > 0 && t.stationIdx === i && !player.car && !player.onTrain &&
@@ -2476,6 +2640,110 @@ function drawMetro() {
     }
   }
 }
+// ---------- Забележителности на София ----------
+function domeShape(x, y, r, light, dark) {
+  const g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.35, r * 0.15, x, y, r);
+  g.addColorStop(0, light);
+  g.addColorStop(1, dark);
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+}
+function drawLandmarks() {
+  if (!landmarks.length) return;
+  const night = nightAmount();
+  for (const lm of landmarks) {
+    const s = worldToScreen(lm.x, lm.y);
+    if (s.x < -280 || s.y < -280 || s.x > VW + 280 || s.y > VH + 280) continue;
+    const f = 0.035 * lm.h;
+    const px = s.x + (s.x - VW / 2) * f, py = s.y + (s.y - VH / 2) * f;
+    const z = camZoom;
+    if (lm.type === 'nevski') {
+      // Златни куполи на кръст, зелени в диагоналите
+      if (night > 0.35) {
+        const gl = ctx.createRadialGradient(px, py, 4 * z, px, py, 60 * z);
+        gl.addColorStop(0, 'rgba(255,214,110,' + (0.35 * night) + ')');
+        gl.addColorStop(1, 'rgba(255,214,110,0)');
+        ctx.fillStyle = gl;
+        ctx.fillRect(px - 60 * z, py - 60 * z, 120 * z, 120 * z);
+      }
+      for (const [ox, oy] of [[-58, -34], [58, -34], [-58, 34], [58, 34]]) {
+        domeShape(px + ox * z, py + oy * z, 10 * z, '#79a888', '#3e6852');
+      }
+      for (const [ox, oy] of [[-58, 0], [58, 0], [0, -36], [0, 36]]) {
+        domeShape(px + ox * z, py + oy * z, 13 * z, '#f4dc82', '#a8842e');
+      }
+      domeShape(px, py, 23 * z, '#f8e498', '#b08a30');
+      ctx.strokeStyle = '#f8e8b0';
+      ctx.lineWidth = 1.6 * z;
+      ctx.beginPath(); ctx.moveTo(px, py - 30 * z); ctx.lineTo(px, py - 23 * z); ctx.stroke();
+    } else if (lm.type === 'su') {
+      // Ректоратът — двор и два зелени купола отпред
+      ctx.fillStyle = 'rgba(0,0,0,0.18)';
+      ctx.fillRect(px - 28 * z, py - 20 * z, 56 * z, 40 * z);
+      domeShape(px - 62 * z, py - 52 * z, 9 * z, '#79a888', '#3e6852');
+      domeShape(px + 62 * z, py - 52 * z, 9 * z, '#79a888', '#3e6852');
+    } else if (lm.type === 'ndk') {
+      // Осмоъгълникът на НДК с радиални ребра
+      const R8 = 74 * z;
+      for (const [rr, col] of [[1, '#e6e2d6'], [0.72, '#d6d2c6'], [0.45, '#c6c2b6'], [0.2, '#b6b2a6']]) {
+        ctx.fillStyle = col;
+        ctx.beginPath();
+        for (let k = 0; k < 8; k++) {
+          const a = Math.PI / 8 + k * Math.PI / 4;
+          const vx = px + Math.cos(a) * R8 * rr, vy = py + Math.sin(a) * R8 * rr * 0.82;
+          k === 0 ? ctx.moveTo(vx, vy) : ctx.lineTo(vx, vy);
+        }
+        ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+      ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+      for (let k = 0; k < 8; k++) {
+        const a = Math.PI / 8 + k * Math.PI / 4;
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.lineTo(px + Math.cos(a) * R8, py + Math.sin(a) * R8 * 0.82);
+        ctx.stroke();
+      }
+    } else if (lm.type === 'stadium') {
+      // Овалният стадион — на нивото на земята
+      const gx = s.x, gy = s.y;
+      ctx.fillStyle = '#8f8a82';
+      ctx.beginPath(); ctx.ellipse(gx, gy, 122 * z, 84 * z, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#a85a40';
+      ctx.beginPath(); ctx.ellipse(gx, gy, 98 * z, 64 * z, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#3f7d36';
+      ctx.beginPath(); ctx.ellipse(gx, gy, 74 * z, 44 * z, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+      ctx.lineWidth = 1.4 * z;
+      ctx.strokeRect(gx - 58 * z, gy - 34 * z, 116 * z, 68 * z);
+      ctx.beginPath(); ctx.moveTo(gx, gy - 34 * z); ctx.lineTo(gx, gy + 34 * z); ctx.stroke();
+      ctx.beginPath(); ctx.arc(gx, gy, 12 * z, 0, Math.PI * 2); ctx.stroke();
+      // Прожектори
+      ctx.fillStyle = night > 0.4 ? '#fff6c8' : '#d8d8dc';
+      for (const [ox, oy] of [[-110, -74], [110, -74], [-110, 74], [110, 74]]) {
+        ctx.beginPath(); ctx.arc(gx + ox * z, gy + oy * z, 3.2 * z, 0, Math.PI * 2); ctx.fill();
+      }
+    } else if (lm.type === 'fountain') {
+      const gx = s.x, gy = s.y;
+      ctx.fillStyle = '#9a948a';
+      ctx.beginPath(); ctx.arc(gx, gy, 17 * z, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#5a9cc4';
+      ctx.beginPath(); ctx.arc(gx, gy, 13.5 * z, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.75)';
+      for (let k = 0; k < 7; k++) {
+        const a = k * Math.PI * 2 / 7 + gameT * 1.5;
+        const rr = (4 + Math.sin(gameT * 4 + k) * 2.5) * z;
+        ctx.beginPath(); ctx.arc(gx + Math.cos(a) * rr, gy + Math.sin(a) * rr - 2 * z, 1.6 * z, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+  }
+}
+
 function drawDoorLabel(door, color, icon, label) {
   if (!door) return;
   const s = worldToScreen(door.x, door.y);
@@ -2669,6 +2937,20 @@ function drawHUD() {
   ctx.font = '12px monospace';
   ctx.fillStyle = 'rgba(255,255,255,0.55)';
   ctx.fillText(theme.name + ' · ниво ' + level, pad, pad + 80);
+  // Име на улицата (само за София)
+  if (theme.streetsH && !player.onTrain) {
+    const txp = Math.floor(player.x / TILE), typ = Math.floor(player.y / TILE);
+    const mv = ((txp % 8) + 8) % 8, mh = ((typ % 8) + 8) % 8;
+    let street = null;
+    if (mv === 3 || mv === 4) street = theme.streetsV[clamp(Math.floor(txp / 8), 0, 7)];
+    else if (mh === 3 || mh === 4) street = theme.streetsH[clamp(Math.floor(typ / 8), 0, 7)];
+    else if (mv === 2 || mv === 5) street = theme.streetsV[clamp(Math.floor(txp / 8), 0, 7)];
+    else if (mh === 2 || mh === 5) street = theme.streetsH[clamp(Math.floor(typ / 8), 0, 7)];
+    if (street) {
+      ctx.fillStyle = 'rgba(255,255,255,0.75)';
+      ctx.fillText('📍 ' + street, pad, pad + 96);
+    }
+  }
 
   // === Дясно: издирване под минимапата ===
   const mini = { x0: VW - clamp(Math.min(VW, VH) * 0.22, 90, 150) - 10, y0: 10, size: clamp(Math.min(VW, VH) * 0.22, 90, 150) };
@@ -2796,7 +3078,7 @@ function drawStartScreen() {
   ctx.fillText('GANG CITY', VW / 2, VH * 0.22);
   ctx.font = 'bold 17px sans-serif';
   ctx.fillStyle = '#7ab6ff';
-  ctx.fillText('Град 1: ' + THEMES[0].name + ' → ' + THEMES[1].name + ' → ' + THEMES[2].name, VW / 2, VH * 0.31);
+  ctx.fillText(THEMES.map(t => t.name).join(' → '), VW / 2, VH * 0.31);
   ctx.font = '15px sans-serif';
   ctx.fillStyle = '#ccc';
   const lines = IS_TOUCH ? [
@@ -2904,6 +3186,7 @@ function frame(now) {
   drawParticles();
   drawMissionMarkers();
   drawBuildings();          // сградите закриват всичко зад тях (както в класиката)
+  drawLandmarks();          // куполи, НДК, стадионът, фонтанът
   drawMetro();              // метрото е над всичко — то е надземна линия
 
   const night = nightAmount();
