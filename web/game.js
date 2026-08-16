@@ -396,67 +396,216 @@ function blockDoor(key) {
 // Входовете, телефоните и Kill Frenzy пикапите се задават в genCityMap()
 
 // ---------------- Аудио ----------------
+/* Звуков двигател v2 — изцяло синтезиран, без файлове:
+   слоеве (град, гуми, дъжд, тълпа), двигател с предавки, градско ехо,
+   позиционирани ефекти (стерео панорама по X), случайни градски събития. */
 const AudioSys = {
-  ctx: null, engineOsc: null, engineGain: null, sirenOsc: null, sirenGain: null, sirenT: 0,
+  ctx: null, master: null, noiseBuf: null, brownBuf: null,
   init() {
     if (this.ctx) return;
     try {
-      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-      this.engineOsc = this.ctx.createOscillator();
-      this.engineOsc.type = 'sawtooth';
-      this.engineGain = this.ctx.createGain(); this.engineGain.gain.value = 0;
-      this.engineOsc.connect(this.engineGain).connect(this.ctx.destination);
-      this.engineOsc.start();
-      this.sirenOsc = this.ctx.createOscillator();
-      this.sirenOsc.type = 'triangle';
-      this.sirenGain = this.ctx.createGain(); this.sirenGain.gain.value = 0;
-      this.sirenOsc.connect(this.sirenGain).connect(this.ctx.destination);
-      this.sirenOsc.start();
+      const AC = window.AudioContext || window.webkitAudioContext;
+      const c = this.ctx = new AC();
+      this.master = c.createDynamicsCompressor();
+      this.master.threshold.value = -20;
+      this.master.ratio.value = 6;
+      this.master.connect(c.destination);
+
+      // Градско ехо (за изстрели и взривове)
+      this.echoIn = c.createGain(); this.echoIn.gain.value = 1;
+      const dly = c.createDelay(0.6); dly.delayTime.value = 0.21;
+      const fb = c.createGain(); fb.gain.value = 0.34;
+      const efl = c.createBiquadFilter(); efl.type = 'lowpass'; efl.frequency.value = 1300;
+      const eg = c.createGain(); eg.gain.value = 0.5;
+      this.echoIn.connect(dly); dly.connect(efl); efl.connect(fb); fb.connect(dly);
+      efl.connect(eg); eg.connect(this.master);
+
+      // Шумови буфери
+      const len = c.sampleRate * 2;
+      this.noiseBuf = c.createBuffer(1, len, c.sampleRate);
+      const nd = this.noiseBuf.getChannelData(0);
+      for (let i = 0; i < len; i++) nd[i] = Math.random() * 2 - 1;
+      this.brownBuf = c.createBuffer(1, len, c.sampleRate);
+      const bd = this.brownBuf.getChannelData(0);
+      let last = 0;
+      for (let i = 0; i < len; i++) { last = (last + (Math.random() * 2 - 1) * 0.02) * 0.998; bd[i] = last * 3.5; }
+
+      const mkLoop = (buffer, type, f0, q, g0) => {
+        const src = c.createBufferSource(); src.buffer = buffer; src.loop = true;
+        const flt = c.createBiquadFilter(); flt.type = type; flt.frequency.value = f0; flt.Q.value = q;
+        const g = c.createGain(); g.gain.value = g0;
+        src.connect(flt); flt.connect(g); g.connect(this.master);
+        src.start();
+        return { flt, g };
+      };
+      // Постоянни слоеве на града
+      this.bed = mkLoop(this.brownBuf, 'lowpass', 260, 0.5, 0.016);   // далечен трафик
+      this.tire = mkLoop(this.noiseBuf, 'lowpass', 480, 0.6, 0);      // гуми по асфалта
+      this.wetH = mkLoop(this.noiseBuf, 'bandpass', 2400, 0.7, 0);    // съскане на мокро
+      this.rainL = mkLoop(this.noiseBuf, 'bandpass', 3600, 0.35, 0);  // дъжд
+      this.crowd = mkLoop(this.noiseBuf, 'bandpass', 850, 1.4, 0);    // глъч на хора
+      this.skid = mkLoop(this.noiseBuf, 'bandpass', 950, 7, 0);       // свистене на гуми
+      this.engN = mkLoop(this.noiseBuf, 'bandpass', 400, 1.6, 0);     // дишане на двигателя
+
+      // Двигател: два осцилатора през нискочестотен филтър
+      this.eng1 = c.createOscillator(); this.eng1.type = 'sawtooth';
+      this.eng2 = c.createOscillator(); this.eng2.type = 'square';
+      this.engFlt = c.createBiquadFilter(); this.engFlt.type = 'lowpass'; this.engFlt.frequency.value = 260;
+      this.engG = c.createGain(); this.engG.gain.value = 0;
+      this.eng1.connect(this.engFlt); this.eng2.connect(this.engFlt);
+      this.engFlt.connect(this.engG); this.engG.connect(this.master);
+      this.eng1.start(); this.eng2.start();
+
+      // Полицейска сирена (виеща)
+      this.sir = c.createOscillator(); this.sir.type = 'triangle';
+      this.sirG = c.createGain(); this.sirG.gain.value = 0;
+      this.sir.connect(this.sirG); this.sirG.connect(this.master);
+      this.sir.start();
+
+      // Таймери за случайни градски звуци
+      this.ev = { horn: 6, birds: 4, bell: 25 };
     } catch (e) { this.ctx = null; }
   },
-  engine(speed, inCar) {
+  pan(x) { return clamp((x - player.x) / 600, -0.9, 0.9); },
+  // Едновременен шумов "залп" през филтър, с обвивка и по избор ехо/панорама
+  burst(o) {
     if (!this.ctx) return;
-    const target = inCar ? clamp(0.015 + Math.abs(speed) / 5000, 0.015, 0.06) : 0;
-    this.engineGain.gain.setTargetAtTime(inCar ? target : 0, this.ctx.currentTime, 0.1);
-    if (inCar) this.engineOsc.frequency.setTargetAtTime(45 + Math.abs(speed) * 0.3, this.ctx.currentTime, 0.05);
-  },
-  siren(on, dt) {
-    if (!this.ctx) return;
-    this.sirenGain.gain.setTargetAtTime(on ? 0.022 : 0, this.ctx.currentTime, 0.2);
-    if (on) {
-      this.sirenT += dt;
-      const hi = Math.floor(this.sirenT * 1.6) % 2 === 0;
-      this.sirenOsc.frequency.setTargetAtTime(hi ? 660 : 470, this.ctx.currentTime, 0.06);
+    const c = this.ctx;
+    const src = c.createBufferSource(); src.buffer = this.noiseBuf;
+    src.playbackRate.value = o.rate || 1;
+    src.loop = true;
+    const flt = c.createBiquadFilter();
+    flt.type = o.ftype || 'lowpass'; flt.frequency.value = o.freq || 800; flt.Q.value = o.q || 0.8;
+    const g = c.createGain();
+    g.gain.setValueAtTime(o.vol || 0.2, c.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + (o.dur || 0.2));
+    src.connect(flt); flt.connect(g);
+    let out = g;
+    if (o.pan && c.createStereoPanner) {
+      const p = c.createStereoPanner(); p.pan.value = o.pan;
+      g.connect(p); out = p;
     }
+    out.connect(this.master);
+    if (o.echo) { const e = c.createGain(); e.gain.value = o.echo; out.connect(e); e.connect(this.echoIn); }
+    src.start(); src.stop(c.currentTime + (o.dur || 0.2) + 0.05);
   },
-  blip(freq, dur, vol, type) {
+  // Тон с плавна смяна на честотата
+  tone(o) {
     if (!this.ctx) return;
-    const o = this.ctx.createOscillator(), g = this.ctx.createGain();
-    o.type = type || 'square'; o.frequency.value = freq;
-    g.gain.value = vol; g.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + dur);
-    o.connect(g).connect(this.ctx.destination);
-    o.start(); o.stop(this.ctx.currentTime + dur);
+    const c = this.ctx;
+    const osc = c.createOscillator();
+    osc.type = o.type || 'sine';
+    osc.frequency.setValueAtTime(o.f0, c.currentTime);
+    if (o.f1 && o.f1 !== o.f0) osc.frequency.exponentialRampToValueAtTime(Math.max(20, o.f1), c.currentTime + o.dur);
+    const g = c.createGain();
+    g.gain.setValueAtTime(o.vol, c.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + o.dur);
+    osc.connect(g);
+    let out = g;
+    if (o.pan && c.createStereoPanner) {
+      const p = c.createStereoPanner(); p.pan.value = o.pan;
+      g.connect(p); out = p;
+    }
+    out.connect(this.master);
+    if (o.echo) { const e = c.createGain(); e.gain.value = o.echo; out.connect(e); e.connect(this.echoIn); }
+    osc.start(); osc.stop(c.currentTime + o.dur + 0.05);
   },
-  noise(dur, vol) {
+  blip(freq, dur, vol, type) { this.tone({ f0: freq, f1: freq, dur, vol, type: type || 'square' }); },
+  // --- Ефекти ---
+  shot() {
+    this.burst({ dur: 0.13, vol: 0.5, freq: 950, q: 0.7, echo: 0.7, rate: 1.25 });
+    this.tone({ f0: 230, f1: 60, dur: 0.08, vol: 0.1, type: 'square' });
+  },
+  mg() { this.burst({ dur: 0.08, vol: 0.36, freq: 1150, q: 0.8, echo: 0.45, rate: 1.4 }); },
+  flame() { if (R() < 0.4) this.burst({ dur: 0.3, vol: 0.07, freq: 550, q: 0.4, rate: 0.8 }); },
+  rocket() { this.burst({ dur: 0.55, vol: 0.28, freq: 380, q: 0.6, echo: 0.4, rate: 0.65 }); },
+  boom() {
+    this.tone({ f0: 100, f1: 27, dur: 0.9, vol: 0.5, type: 'sine', echo: 0.5 });
+    this.burst({ dur: 0.85, vol: 0.5, freq: 240, q: 0.5, echo: 0.8, rate: 0.5 });
+    this.burst({ dur: 0.22, vol: 0.26, freq: 2600, q: 0.7, rate: 1.4 });
+  },
+  hit() {
+    this.burst({ dur: 0.1, vol: 0.24, freq: 320, q: 1, rate: 0.8 });
+    this.tone({ f0: 170, f1: 65, dur: 0.09, vol: 0.09, type: 'square' });
+  },
+  pickup() { this.blip(880, 0.1, 0.12); this.blip(1320, 0.12, 0.09); },
+  ring() { this.blip(1480, 0.07, 0.11); this.blip(1480, 0.07, 0.09); },
+  gouranga() { [660, 880, 1100, 1320].forEach((f, i) => setTimeout(() => this.blip(f, 0.12, 0.14), i * 90)); },
+  step(hard) {
+    this.burst({ dur: 0.045, vol: 0.05, freq: hard ? 1500 : 950, q: 1.6, ftype: 'bandpass', rate: 1.6 });
+  },
+  horn(x) {
+    const f = [349, 392, 440, 494][Math.floor(R() * 4)];
+    const p = this.pan(x);
+    const d = 0.3 + R() * 0.45;
+    this.tone({ f0: f, f1: f, dur: d, vol: 0.05, type: 'square', pan: p });
+    if (R() < 0.5) this.tone({ f0: f * 1.26, f1: f * 1.26, dur: d, vol: 0.035, type: 'square', pan: p });
+  },
+  scream(x) {
+    this.tone({ f0: 750 + R() * 350, f1: 380, dur: 0.32, vol: 0.045, type: 'sawtooth', pan: this.pan(x) });
+  },
+  bell() {
+    this.tone({ f0: 392, f1: 390, dur: 2.6, vol: 0.09, type: 'sine', echo: 0.5 });
+    this.tone({ f0: 988, f1: 985, dur: 1.5, vol: 0.035, type: 'sine' });
+  },
+  birds() {
+    const f = 2600 + R() * 900;
+    this.tone({ f0: f, f1: f * 0.82, dur: 0.09, vol: 0.028, type: 'sine', pan: (R() - 0.5) });
+    setTimeout(() => this.tone({ f0: f * 1.1, f1: f * 0.9, dur: 0.11, vol: 0.024, type: 'sine' }), 120 + R() * 120);
+  },
+  thunder() {
+    this.tone({ f0: 68, f1: 24, dur: 2.4, vol: 0.4, type: 'sine' });
+    this.burst({ dur: 2.1, vol: 0.32, freq: 170, q: 0.4, rate: 0.4, echo: 0.6 });
+  },
+  // Всеки кадър: настройва постоянните слоеве по състоянието на играта
+  update(dt, st) {
     if (!this.ctx) return;
-    const len = Math.floor(this.ctx.sampleRate * dur);
-    const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
-    const src = this.ctx.createBufferSource(); src.buffer = buf;
-    const g = this.ctx.createGain(); g.gain.value = vol;
-    src.connect(g).connect(this.ctx.destination);
-    src.start();
-  },
-  shot() { this.noise(0.1, 0.22); },
-  mg() { this.noise(0.06, 0.16); },
-  flame() { if (R() < 0.3) this.noise(0.15, 0.06); },
-  rocket() { this.noise(0.3, 0.2); this.blip(120, 0.3, 0.15, 'sawtooth'); },
-  boom() { this.noise(0.7, 0.5); this.blip(50, 0.6, 0.35, 'sine'); },
-  pickup() { this.blip(880, 0.1, 0.14); this.blip(1320, 0.12, 0.1); },
-  ring() { this.blip(1500, 0.07, 0.12); this.blip(1500, 0.07, 0.1); },
-  hit() { this.blip(140, 0.08, 0.18, 'sawtooth'); },
-  gouranga() { [660, 880, 1100, 1320].forEach((f, i) => setTimeout(() => this.blip(f, 0.12, 0.16), i * 90)); }
+    const now = this.ctx.currentTime;
+    if (st.inCar) {
+      // Предавки: оборотите растат и падат при смяна
+      const gear = Math.min(4, Math.floor(st.speed / 95));
+      const rpm = clamp((st.speed - gear * 95) / 95, 0, 1);
+      const f = 42 + rpm * 66 + gear * 9;
+      this.eng1.frequency.setTargetAtTime(f, now, 0.06);
+      this.eng2.frequency.setTargetAtTime(f * 1.5, now, 0.06);
+      this.engFlt.frequency.setTargetAtTime(230 + rpm * 850, now, 0.1);
+      this.engG.gain.setTargetAtTime(0.026 + rpm * 0.028 + (st.speed > 3 ? 0.01 : 0), now, 0.08);
+      this.engN.flt.frequency.setTargetAtTime(320 + rpm * 1100, now, 0.1);
+      this.engN.g.gain.setTargetAtTime(0.012 + rpm * 0.018, now, 0.1);
+      this.tire.g.gain.setTargetAtTime(Math.min(0.045, st.speed / 9000) * (1 + st.wet), now, 0.15);
+    } else {
+      this.engG.gain.setTargetAtTime(0, now, 0.15);
+      this.engN.g.gain.setTargetAtTime(0, now, 0.15);
+      this.tire.g.gain.setTargetAtTime(0, now, 0.2);
+    }
+    this.wetH.g.gain.setTargetAtTime(st.wet * (st.inCar ? Math.min(0.04, st.speed / 9000) : 0.004), now, 0.25);
+    this.skid.g.gain.setTargetAtTime(st.skid ? 0.055 : 0, now, st.skid ? 0.03 : 0.1);
+    if (st.skid) this.skid.flt.frequency.setTargetAtTime(850 + Math.sin(gameT * 21) * 200, now, 0.05);
+    this.rainL.g.gain.setTargetAtTime(st.rain * 0.05, now, 0.6);
+    this.crowd.g.gain.setTargetAtTime(Math.min(0.028, st.pedNear * 0.0035), now, 0.6);
+    this.bed.g.gain.setTargetAtTime(0.011 + (1 - st.night) * 0.009, now, 1);
+    // Сирена: виеща, по-силна при близка патрулка
+    if (st.siren > 0) {
+      this.sir.frequency.setTargetAtTime(620 + Math.sin(gameT * 2.7) * 170, now, 0.05);
+      this.sirG.gain.setTargetAtTime(0.008 + st.siren * 0.024, now, 0.2);
+    } else this.sirG.gain.setTargetAtTime(0, now, 0.3);
+    // Случайни градски събития
+    this.ev.horn -= dt;
+    if (this.ev.horn <= 0) {
+      this.ev.horn = 5 + R() * 11;
+      this.horn(player.x + (R() - 0.5) * 1000);
+    }
+    this.ev.birds -= dt;
+    if (this.ev.birds <= 0) {
+      this.ev.birds = 2.5 + R() * 5;
+      if (st.parkNear && st.night < 0.4 && st.rain < 0.3) this.birds();
+    }
+    this.ev.bell -= dt;
+    if (this.ev.bell <= 0) {
+      this.ev.bell = 35 + R() * 40;
+      if (st.nearCathedral) this.bell();
+    }
+  }
 };
 
 // ---------------- Оръжия ----------------
@@ -499,6 +648,9 @@ function makePed(x, y, cop) {
     panic: 0, cop: !!cop, burn: 0,
     skin: ['#e0b090', '#c68863', '#8d5a3b', '#f0c8a0'][Math.floor(R() * 4)],
     shirt: cop ? '#2a4a80' : ['#a33', '#37a', '#585', '#963', '#777', '#a83', '#559', '#7a4a6a'][Math.floor(R() * 8)],
+    hair: ['#221a10', '#4a3520', '#7a5a30', '#151515', '#8a8a86', '#5a3828'][Math.floor(R() * 6)],
+    bag: !cop && R() < 0.25,
+    walkT: R() * 6, moving: 0,
     shootT: 1 + R(), arrestT: 0, markTarget: false
   };
 }
@@ -522,6 +674,7 @@ const gour = { count: 0, timer: 0 };
 let resprayCooldown = 0;
 let levelCompleteT = 0, gameOver = false;
 let citySwitchPending = false, travelToName = '';
+let skidActive = false;  // играчът поднася в момента (за звука)
 
 let camX = 0, camY = 0, camZoom = 1;
 let gameT = 0, paused = false, started = false;
@@ -798,13 +951,16 @@ function fireWeapon(shooter, angle, weaponIdx, fromPolice) {
   }
 }
 function panicNear(x, y, r) {
+  let anyone = false;
   for (const p of peds) {
     if (p.dead || p.cop) continue;
     if (dist2(p.x, p.y, x, y) < r * r) {
+      if (p.panic <= 0) anyone = true;
       p.panic = 6 + R() * 4;
       p.angle = Math.atan2(p.y - y, p.x - x) + (R() - 0.5);
     }
   }
+  if (anyone && R() < 0.6) AudioSys.scream(x);
 }
 function damagePed(p, dmg, byPlayer, cause) {
   if (p.dead) return;
@@ -1253,7 +1409,6 @@ function updatePlayer(dt, inp) {
         showMsg('Слезе на „' + stName + '“.', 2);
       } else showMsg('Изчакай следващата спирка.', 1.5);
     }
-    AudioSys.engine(0, false);
     return;
   }
 
@@ -1265,7 +1420,6 @@ function updatePlayer(dt, inp) {
 
   if (player.car) updatePlayerCar(dt, inp, player.car);
   else updatePlayerFoot(dt, inp);
-  AudioSys.engine(player.car ? player.car.speed : 0, !!player.car);
 
   // Пикапи
   for (let i = pickups.length - 1; i >= 0; i--) {
@@ -1307,6 +1461,15 @@ function updatePlayerFoot(dt, inp) {
     const ny = player.y + inp.my * spd * dt;
     const pos = collideCircle(nx, ny, 9);
     player.x = pos.x; player.y = pos.y;
+    player.walkT = (player.walkT || 0) + spd * dt * 0.1;
+    player.moving = 1;
+    // Стъпки
+    player.stepD = (player.stepD || 0) + spd * dt;
+    if (player.stepD > 30) {
+      player.stepD = 0;
+      const idx = Math.floor(player.y / TILE) * MW + Math.floor(player.x / TILE);
+      AudioSys.step(yellowRoad && yellowRoad[idx]);
+    }
   }
 }
 function updatePlayerCar(dt, inp, c) {
@@ -1318,16 +1481,17 @@ function updatePlayerCar(dt, inp, c) {
   const t = tileAtPx(c.x, c.y);
   const drag = t === T.ROAD ? 0.55 : 2.2;
   c.speed -= c.speed * drag * dt;
-  if (inp.brake) c.speed -= c.speed * 4.5 * dt;
+  if (inp.brake) c.speed -= c.speed * (4.5 - weather.wet * 1.6) * dt; // на мокро се спира по-трудно
   c.speed = clamp(c.speed, -c.maxSpeed * 0.4, c.maxSpeed);
 
   const steerInput = inp.mx;
   const handbrakeBoost = inp.brake && Math.abs(c.speed) > 120 ? 1.7 : 1;
-  const steerPow = clamp(Math.abs(c.speed) / 60, 0, 1) * 2.5 * handbrakeBoost / Math.sqrt(c.mass);
+  const steerPow = clamp(Math.abs(c.speed) / 60, 0, 1) * 2.5 * handbrakeBoost * (1 - weather.wet * 0.15) / Math.sqrt(c.mass);
   if (Math.abs(c.speed) > 4) c.angle += steerInput * steerPow * dt * (c.speed > 0 ? 1 : -1);
 
-  // Следи от гуми при дрифт/спиране
-  if ((Math.abs(steerInput) > 0.65 && Math.abs(c.speed) > 230) || (inp.brake && Math.abs(c.speed) > 160)) {
+  // Следи от гуми при дрифт/спиране (на мокро — по-лесно)
+  if ((Math.abs(steerInput) > 0.65 && Math.abs(c.speed) > 230 - weather.wet * 60) || (inp.brake && Math.abs(c.speed) > 160 - weather.wet * 40)) {
+    skidActive = true;
     const bx = c.x - Math.cos(c.angle) * c.l * 0.35, by = c.y - Math.sin(c.angle) * c.l * 0.35;
     const ox = Math.cos(c.angle + Math.PI / 2) * c.w * 0.35, oy = Math.sin(c.angle + Math.PI / 2) * c.w * 0.35;
     const dxv = Math.cos(c.angle) * 6, dyv = Math.sin(c.angle) * 6;
@@ -1449,6 +1613,8 @@ function updateCarAI(c, dt) {
 
   const want = blocked ? 0 : cruise;
   c.speed += clamp(want - c.speed, -300 * dt, 120 * dt);
+  // Нетърпелив шофьор — натиска клаксона, когато е блокиран
+  if (blocked && Math.abs(c.speed) < 20 && R() < dt * 0.2) AudioSys.horn(c.x);
 
   const nx = c.x + Math.cos(c.angle) * c.speed * dt;
   const ny = c.y + Math.sin(c.angle) * c.speed * dt;
@@ -1518,6 +1684,8 @@ function updatePed(p, dt) {
   }
   const pos = collideCircle(nx, ny, 7);
   p.x = pos.x; p.y = pos.y;
+  p.walkT += spd * dt * 0.1;
+  p.moving = 1;
   if (p.markTarget) {
     const d = dist2(p.x, p.y, player.x, player.y);
     if (d < 350 * 350) { p.panic = 3; p.angle = Math.atan2(p.y - player.y, p.x - player.x); }
@@ -1533,6 +1701,8 @@ function updateCopPed(p, dt) {
     const ny = p.y + Math.sin(p.angle) * spd * dt;
     const pos = collideCircle(nx, ny, 7);
     p.x = pos.x; p.y = pos.y;
+    p.walkT += spd * dt * 0.1;
+    p.moving = 1;
     p.arrestT = 0;
   } else if (!player.car && !player.onTrain) {
     // Арест — ако ченгето те държи близо
@@ -1650,7 +1820,35 @@ function nightAmount() {
   const phase = (gameT % DAY_LENGTH) / DAY_LENGTH;
   return clamp(Math.sin(phase * Math.PI * 2 - Math.PI / 2) * 0.5 + 0.5, 0, 1);
 }
-// Слънце: посока и дължина на сенките се менят с часа на деня
+// Метеорологично време: ясно ↔ дъжд, мокър асфалт, гръмотевици
+const weather = {
+  state: 'clear', timer: 55 + Math.random() * 70,
+  rain: 0,      // интензивност на дъжда (0..1)
+  wet: 0,       // колко е мокра настилката (0..1), съхне бавно
+  thunderT: 14, flash: 0
+};
+function updateWeather(dt) {
+  weather.timer -= dt;
+  if (weather.timer <= 0) {
+    if (weather.state === 'clear') { weather.state = 'rain'; weather.timer = 45 + R() * 55; showMsg('Заваля дъжд...', 2.5); }
+    else { weather.state = 'clear'; weather.timer = 100 + R() * 130; }
+  }
+  const target = weather.state === 'rain' ? 1 : 0;
+  weather.rain += clamp(target - weather.rain, -dt * 0.12, dt * 0.12);
+  if (weather.rain > 0.4) weather.wet = Math.min(1, weather.wet + dt * 0.09);
+  else weather.wet = Math.max(0, weather.wet - dt * 0.012);
+  weather.flash = Math.max(0, weather.flash - dt * 2.5);
+  if (weather.rain > 0.5) {
+    weather.thunderT -= dt;
+    if (weather.thunderT <= 0) {
+      weather.thunderT = 14 + R() * 32;
+      weather.flash = 0.7;
+      AudioSys.thunder();
+    }
+  }
+}
+// Слънце: посока и дължина на сенките се менят с часа на деня;
+// при дъжд облаците скриват сенките
 function sunState() {
   const p = (gameT % DAY_LENGTH) / DAY_LENGTH;      // 0 = обед
   const a = Math.sin(p * Math.PI * 2);               // -1..1 през деня
@@ -1659,7 +1857,7 @@ function sunState() {
   return {
     dx: Math.cos(ang), dy: Math.sin(ang),
     len: 0.8 + 1.0 * Math.abs(a),
-    alpha: (1 - night) * 0.42
+    alpha: (1 - night) * 0.42 * (1 - weather.rain * 0.85)
   };
 }
 // Сенки от сгради и дървета — рисуват се плътно върху отделен слой,
@@ -1868,6 +2066,20 @@ function drawGround() {
         if (tileAt(tx, ty + 1) === T.WATER) ctx.fillRect(s.x, s.y + sz - 2.2 * camZoom, sz, 2.2 * camZoom);
         if (tileAt(tx - 1, ty) === T.WATER) ctx.fillRect(s.x, s.y, 2.2 * camZoom, sz);
         if (tileAt(tx + 1, ty) === T.WATER) ctx.fillRect(s.x + sz - 2.2 * camZoom, s.y, 2.2 * camZoom, sz);
+        // Мокра настилка: потъмняване + локви, отразяващи небето
+        if (weather.wet > 0.05) {
+          ctx.fillStyle = 'rgba(12,14,24,' + (0.24 * weather.wet) + ')';
+          ctx.fillRect(s.x, s.y, sz, sz);
+          if (h > 0.52 && h < 0.75) {
+            const shimmer = 0.05 * Math.sin(gameT * 2.2 + tx * 3.1 + ty * 1.7);
+            ctx.fillStyle = (night > 0.5 ? 'rgba(130,150,190,' : 'rgba(175,195,220,') +
+              (weather.wet * (0.17 + shimmer)) + ')';
+            ctx.beginPath();
+            ctx.ellipse(s.x + sz * (0.25 + h * 0.5), s.y + sz * 0.55,
+              sz * (0.18 + h * 0.14), sz * (0.1 + h * 0.07), (h - 0.6) * 5, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
       } else if (t === T.SIDE) {
         // Бордюр към пътя
         ctx.fillStyle = 'rgba(0,0,0,0.18)';
@@ -2206,6 +2418,11 @@ function drawCar(c) {
     ctx.lineTo((c.l / 2 + 95) * camZoom, 34 * camZoom);
     ctx.lineTo(c.l / 2 * camZoom, 7 * camZoom);
     ctx.fill();
+    // Отражение на фаровете в мокрия асфалт — тясна ярка ивица
+    if (weather.wet > 0.15) {
+      ctx.fillStyle = 'rgba(255,244,190,' + (0.16 * night * weather.wet) + ')';
+      ctx.fillRect(c.l / 2 * camZoom, -3 * camZoom, 70 * camZoom, 6 * camZoom);
+    }
     ctx.restore();
   }
 }
@@ -2221,36 +2438,65 @@ function drawPed(p) {
     ctx.globalAlpha = clamp(1 - p.deadT / 15, 0, 1);
     ctx.fillStyle = 'rgba(120,16,16,0.55)';
     ctx.beginPath(); ctx.arc(-2, 1, 9, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = p.shirt;
-    ctx.fillRect(-8, -4, 16, 8);
+    // Проснато тяло с разперени крайници
     ctx.fillStyle = p.skin;
-    ctx.beginPath(); ctx.arc(9, 0, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(-7, -5, 1.6, 0, Math.PI * 2); ctx.fill();  // ръка
+    ctx.beginPath(); ctx.arc(-3, 6, 1.6, 0, Math.PI * 2); ctx.fill();   // ръка
+    ctx.fillStyle = '#14141a';
+    ctx.beginPath(); ctx.arc(-9, 2, 1.7, 0, Math.PI * 2); ctx.fill();   // крак
+    ctx.beginPath(); ctx.arc(-8, -1, 1.7, 0, Math.PI * 2); ctx.fill();  // крак
+    ctx.fillStyle = p.shirt;
+    ctx.beginPath(); ctx.ellipse(-1, 0, 7, 4.6, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = p.skin;
+    ctx.beginPath(); ctx.arc(7.5, 1.5, 3.4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = p.hair;
+    ctx.beginPath(); ctx.arc(8.3, 2, 2.6, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
     return;
   }
   ctx.rotate(p.angle);
+  // Сянка
   ctx.fillStyle = 'rgba(0,0,0,0.28)';
-  ctx.beginPath(); ctx.arc(1.5, 1.5, 6.5, 0, Math.PI * 2); ctx.fill();
-  const step = Math.sin(gameT * 12 + p.x * 0.1) * (p.panic > 0 || p.cop ? 4 : 2.4);
-  ctx.fillStyle = '#223';
-  ctx.fillRect(-2 + step, -5, 4, 3);
-  ctx.fillRect(-2 - step, 2, 4, 3);
-  ctx.fillStyle = p.shirt;
-  ctx.beginPath(); ctx.arc(0, 0, 6, 0, Math.PI * 2); ctx.fill();
-  // Рамене
-  ctx.fillStyle = shade(p.shirt, 0.75);
-  ctx.fillRect(-2, -6.5, 4, 2.4);
-  ctx.fillRect(-2, 4.1, 4, 2.4);
+  ctx.beginPath(); ctx.arc(1.5, 1.5, 6.2, 0, Math.PI * 2); ctx.fill();
+  // Походка: краката и ръцете се люлеят в противофаза
+  const step = p.moving ? Math.sin(p.walkT) : 0;
+  const stride = p.panic > 0 || p.cop ? 4 : 3;
+  // Стъпала
+  ctx.fillStyle = '#14141a';
+  ctx.beginPath(); ctx.arc(step * stride, -2.5, 1.7, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(-step * stride, 2.5, 1.7, 0, Math.PI * 2); ctx.fill();
+  // Ръкави + длани (обратно на краката)
+  const arm = -step;
+  ctx.fillStyle = shade(p.shirt, 0.78);
+  ctx.beginPath(); ctx.arc(arm * 1.6, -5.1, 1.9, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(-arm * 1.6, 5.1, 1.9, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = p.skin;
-  ctx.beginPath(); ctx.arc(2, 0, 3.4, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(arm * 3.1 + 0.6, -5.7, 1.4, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(-arm * 3.1 + 0.6, 5.7, 1.4, 0, Math.PI * 2); ctx.fill();
+  // Торс — раменете са широки напречно на движението
+  ctx.fillStyle = p.shirt;
+  ctx.beginPath(); ctx.ellipse(0, 0, 4.2, 6, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.13)';
+  ctx.beginPath(); ctx.ellipse(0.9, -1, 2.8, 4, 0, 0, Math.PI * 2); ctx.fill();
+  // Чанта през рамо
+  if (p.bag) {
+    ctx.fillStyle = '#54432e';
+    ctx.fillRect(-2.2, 5.4, 4, 2.4);
+  }
+  // Глава с коса
+  ctx.fillStyle = p.skin;
+  ctx.beginPath(); ctx.arc(1.7, 0, 3.1, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = p.hair;
+  ctx.beginPath(); ctx.arc(0.6, 0, 2.7, 0, Math.PI * 2); ctx.fill();
   if (p.cop) {
-    // Фуражка
+    // Фуражка с кокарда
     ctx.fillStyle = '#20375c';
-    ctx.beginPath(); ctx.arc(2, 0, 3.8, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(1.4, 0, 3.6, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#c9b23c';
-    ctx.fillRect(3.6, -1, 1.6, 2);
+    ctx.fillRect(3.4, -0.9, 1.6, 1.8);
   }
   ctx.restore();
+  p.moving = 0;
   if (p.markTarget) {
     ctx.strokeStyle = 'rgba(230,80,80,0.9)';
     ctx.lineWidth = 3;
@@ -2267,22 +2513,48 @@ function drawPlayer() {
   ctx.translate(s.x, s.y);
   ctx.scale(camZoom, camZoom);
   ctx.rotate(player.angle);
+  // Сянка
   ctx.fillStyle = 'rgba(0,0,0,0.3)';
-  ctx.beginPath(); ctx.arc(2, 2, 7, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#16161e';
-  ctx.beginPath(); ctx.arc(0, 0, 7, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#0e0e14';
-  ctx.fillRect(-2.5, -7.6, 5, 2.6);
-  ctx.fillRect(-2.5, 5, 5, 2.6);
+  ctx.beginPath(); ctx.arc(1.8, 1.8, 6.6, 0, Math.PI * 2); ctx.fill();
+  const step = player.moving ? Math.sin(player.walkT) : 0;
   const w = WEAPONS[player.weapon];
-  if (!w.melee) {
-    ctx.fillStyle = '#333';
-    ctx.fillRect(4, -1.5, w.rocket ? 12 : 9, 3);
-    if (w.rocket) { ctx.fillStyle = '#722'; ctx.fillRect(13, -2.2, 4, 4.4); }
+  // Стъпала
+  ctx.fillStyle = '#0c0c12';
+  ctx.beginPath(); ctx.arc(step * 3.4, -2.6, 1.8, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(-step * 3.4, 2.6, 1.8, 0, Math.PI * 2); ctx.fill();
+  if (w.melee) {
+    // Свободни ръце, люлеят се при ходене
+    const arm = -step;
+    ctx.fillStyle = '#0e0e14';
+    ctx.beginPath(); ctx.arc(arm * 1.6, -5.3, 2, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(-arm * 1.6, 5.3, 2, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#e0b090';
+    ctx.beginPath(); ctx.arc(arm * 3.2 + 0.6, -5.9, 1.5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(-arm * 3.2 + 0.6, 5.9, 1.5, 0, Math.PI * 2); ctx.fill();
   }
+  // Торс — черно яке с презрамка
+  ctx.fillStyle = '#16161e';
+  ctx.beginPath(); ctx.ellipse(0, 0, 4.6, 6.4, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.1)';
+  ctx.beginPath(); ctx.ellipse(1, -1.2, 3, 4.2, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#2a2a36';
+  ctx.fillRect(-1, -6, 2, 12);
+  if (!w.melee) {
+    // Двете ръце държат оръжието напред
+    ctx.fillStyle = '#333';
+    ctx.fillRect(4, -1.4, w.rocket ? 12 : 9, 2.8);
+    if (w.rocket) { ctx.fillStyle = '#722'; ctx.fillRect(13, -2.2, 4, 4.4); }
+    ctx.fillStyle = '#e0b090';
+    ctx.beginPath(); ctx.arc(4.6, -1.8, 1.5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(5.2, 1.8, 1.5, 0, Math.PI * 2); ctx.fill();
+  }
+  // Глава с тъмна коса
   ctx.fillStyle = '#e0b090';
-  ctx.beginPath(); ctx.arc(2.5, 0, 3.6, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(2, 0, 3.3, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#1c140c';
+  ctx.beginPath(); ctx.arc(0.9, 0, 2.9, 0, Math.PI * 2); ctx.fill();
   ctx.restore();
+  player.moving = 0;
 }
 
 function drawProjectiles() {
@@ -2343,6 +2615,7 @@ function drawBuildings() {
 
   const cX = VW / 2, cY = VH / 2;
   const night = nightAmount();
+  const sun = sunState();
   for (const tI of tiles) {
     const { tx, ty } = tI;
     const key = blockKeyOf(tx, ty);
@@ -2381,17 +2654,30 @@ function drawBuildings() {
       ctx.lineTo(rf[e.a].x, rf[e.a].y);
       ctx.closePath();
       ctx.fill();
-      // Прозорци по стената (при по-високи сгради)
+      // Прозорци по стената — отразяват небето и слънцето според ориентацията
       if (h >= 2 && camZoom > 0.8) {
-        const litSeed = hash2(tx * 3 + e.a, ty * 3 + e.b);
-        ctx.fillStyle = night > 0.5 && litSeed > 0.4 ? 'rgba(255,220,130,0.55)' : 'rgba(20,26,36,0.35)';
+        const sunDot = -(e.nx * sun.dx + e.ny * sun.dy); // стената гледа ли към слънцето
         for (let wi = 1; wi <= 2; wi++) {
           const t0 = wi / 3;
           const wx1 = g[e.a].x + (rf[e.a].x - g[e.a].x) * t0;
           const wy1 = g[e.a].y + (rf[e.a].y - g[e.a].y) * t0;
           const wx2 = g[e.b].x + (rf[e.b].x - g[e.b].x) * t0;
           const wy2 = g[e.b].y + (rf[e.b].y - g[e.b].y) * t0;
-          for (let seg = 0.15; seg < 0.85; seg += 0.24) {
+          let si = 0;
+          for (let seg = 0.15; seg < 0.85; seg += 0.24, si++) {
+            const wseed = hash2(tx * 13 + wi * 7 + si, ty * 17 + e.a * 5);
+            if (night > 0.5) {
+              // Нощем: някои прозорци светят топло, други са тъмни
+              ctx.fillStyle = wseed > 0.45
+                ? 'rgba(255,214,120,' + (0.3 + wseed * 0.45) + ')'
+                : 'rgba(12,16,24,0.55)';
+            } else if (wseed > 0.9 && sunDot > 0.2 && sun.alpha > 0.1) {
+              ctx.fillStyle = 'rgba(255,250,230,0.9)';                       // блик от слънцето
+            } else if (sunDot > 0.1) {
+              ctx.fillStyle = 'rgba(185,210,235,' + (0.28 + sunDot * 0.28) + ')'; // отражение на небето
+            } else {
+              ctx.fillStyle = 'rgba(28,38,52,0.5)';                          // сенчеста фасада
+            }
             const px = wx1 + (wx2 - wx1) * seg, py = wy1 + (wy2 - wy1) * seg;
             ctx.fillRect(px, py, 4 * camZoom, 3 * camZoom);
           }
@@ -3134,6 +3420,7 @@ function frame(now) {
     }
 
     const inp = inputState();
+    skidActive = false;
     updatePlayer(dt, inp);
     for (const c of cars) updateCarAI(c, dt);
     for (const p of peds) updatePed(p, dt);
@@ -3145,16 +3432,37 @@ function frame(now) {
     updateFrenzy(dt);
     updateRespray(dt);
     updateMetro(dt);
+    updateWeather(dt);
     recycle(dt);
 
-    // Сирена — ако наблизо гони патрулка
-    let sirenOn = false;
+    // Звуково състояние на света
+    let sirenProx = 0;
     if (player.wanted > 0) {
       for (const c of cars) {
-        if (c.kind === 'police' && !c.dead && dist2(c.x, c.y, player.x, player.y) < 700 * 700) { sirenOn = true; break; }
+        if (c.kind === 'police' && !c.dead) {
+          const d = Math.sqrt(dist2(c.x, c.y, player.x, player.y));
+          if (d < 800) sirenProx = Math.max(sirenProx, 1 - d / 800);
+        }
       }
     }
-    AudioSys.siren(sirenOn, dt);
+    let pedNear = 0;
+    for (const p of peds) {
+      if (!p.dead && dist2(p.x, p.y, player.x, player.y) < 240 * 240) pedNear++;
+    }
+    const parkNear =
+      tileAtPx(player.x + 90, player.y) === T.PARK || tileAtPx(player.x - 90, player.y) === T.PARK ||
+      tileAtPx(player.x, player.y + 90) === T.PARK || tileAtPx(player.x, player.y - 90) === T.PARK;
+    const nearCathedral = !!(theme.sofia && landmarks.length &&
+      dist2(player.x, player.y, landmarks[0].x, landmarks[0].y) < 500 * 500);
+    AudioSys.update(dt, {
+      inCar: !!player.car,
+      speed: player.car ? Math.abs(player.car.speed) : 0,
+      skid: skidActive,
+      wet: weather.wet, rain: weather.rain,
+      night: nightAmount(),
+      siren: sirenProx,
+      pedNear, parkNear, nearCathedral
+    });
 
     if (score > scoreBest) {
       scoreBest = score;
@@ -3195,6 +3503,32 @@ function frame(now) {
     ctx.fillRect(0, 0, VW, VH);
   }
 
+  // Дъжд: мрачно небе, диагонални капки, пръски и светкавици
+  if (weather.rain > 0.02) {
+    ctx.fillStyle = 'rgba(38,46,60,' + (weather.rain * 0.2) + ')';
+    ctx.fillRect(0, 0, VW, VH);
+    const n = Math.floor(95 * weather.rain);
+    const wind = 3 + Math.sin(gameT * 0.3) * 2.5;
+    ctx.strokeStyle = 'rgba(200,220,245,0.3)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) {
+      const rx = Math.random() * VW, ry = Math.random() * VH;
+      const l = 9 + Math.random() * 11;
+      ctx.moveTo(rx, ry);
+      ctx.lineTo(rx + wind, ry + l);
+    }
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(215,230,245,0.22)';
+    for (let i = 0; i < n / 3; i++) {
+      ctx.fillRect(Math.random() * VW, Math.random() * VH, 2, 1);
+    }
+  }
+  if (weather.flash > 0) {
+    ctx.fillStyle = 'rgba(240,246,255,' + (weather.flash * 0.45) + ')';
+    ctx.fillRect(0, 0, VW, VH);
+  }
+
   // "Дрон" пост-обработка: златист час, филмово зърно, винетка
   const sunNow = sunState();
   if (sunNow.alpha > 0.05 && sunNow.len > 1.4) {
@@ -3225,6 +3559,7 @@ window.__gc = {
   get fps() { return fpsEMA; },
   get sun() { return sunState(); },
   setTime(t) { gameT = t; },
+  setRain(v) { weather.state = v > 0 ? 'rain' : 'clear'; weather.rain = v; weather.wet = v; weather.timer = 60; },
   teleport(x, y) { player.x = x; player.y = y; camX = x; camY = y; },
   cheatScore(n) { addScore(n); },
   forceStart() { started = true; }
