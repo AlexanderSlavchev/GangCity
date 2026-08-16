@@ -58,6 +58,55 @@ window.addEventListener('resize', resize);
 resize();
 const IS_TOUCH = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
 
+// ---------------- Текстури и "фото" ефекти ----------------
+function makeCanvas(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+const TEX = { grain: null, organic: null, vignette: null };
+(function buildNoise() {
+  // Фин зърнест шум — асфалт, бетон, покриви
+  const c = makeCanvas(256, 256), g = c.getContext('2d');
+  const id = g.createImageData(256, 256);
+  for (let i = 0; i < id.data.length; i += 4) {
+    const lum = Math.random() < 0.5 ? 0 : 255;
+    id.data[i] = lum; id.data[i + 1] = lum; id.data[i + 2] = lum;
+    id.data[i + 3] = Math.random() * 44;
+  }
+  g.putImageData(id, 0, 0);
+  TEX.grain = c;
+  // Органичен петнист шум — трева, паркове, вода
+  const c2 = makeCanvas(256, 256), g2 = c2.getContext('2d');
+  const id2 = g2.createImageData(256, 256);
+  for (let i = 0; i < id2.data.length; i += 4) {
+    const n = Math.random() * 0.5 + Math.random() * 0.5;
+    const lum = n < 0.5 ? 0 : 255;
+    id2.data[i] = lum; id2.data[i + 1] = lum; id2.data[i + 2] = lum;
+    id2.data[i + 3] = Math.abs(n - 0.5) * 110;
+  }
+  g2.putImageData(id2, 0, 0);
+  TEX.organic = c2;
+})();
+function buildVignette() {
+  const c = makeCanvas(Math.max(2, Math.round(VW / 4)), Math.max(2, Math.round(VH / 4)));
+  const g = c.getContext('2d');
+  const grad = g.createRadialGradient(c.width / 2, c.height / 2, Math.min(c.width, c.height) * 0.5,
+    c.width / 2, c.height / 2, Math.max(c.width, c.height) * 0.78);
+  grad.addColorStop(0, 'rgba(0,0,0,0)');
+  grad.addColorStop(1, 'rgba(8,8,18,0.38)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, c.width, c.height);
+  TEX.vignette = c;
+}
+buildVignette();
+window.addEventListener('resize', buildVignette);
+
+// Сенчест слой (половин резолюция — меки сенки, евтино)
+const shadowCanvas = makeCanvas(2, 2);
+function sizeShadowCanvas() {
+  shadowCanvas.width = Math.max(2, Math.round(VW / 2));
+  shadowCanvas.height = Math.max(2, Math.round(VH / 2));
+}
+sizeShadowCanvas();
+window.addEventListener('resize', sizeShadowCanvas);
+
 // ---------------- Град ----------------
 const map = new Uint8Array(MW * MH);
 const blockColor = {}, blockHeight = {}, blockRoof = {};
@@ -1500,6 +1549,65 @@ function nightAmount() {
   const phase = (gameT % DAY_LENGTH) / DAY_LENGTH;
   return clamp(Math.sin(phase * Math.PI * 2 - Math.PI / 2) * 0.5 + 0.5, 0, 1);
 }
+// Слънце: посока и дължина на сенките се менят с часа на деня
+function sunState() {
+  const p = (gameT % DAY_LENGTH) / DAY_LENGTH;      // 0 = обед
+  const a = Math.sin(p * Math.PI * 2);               // -1..1 през деня
+  const ang = Math.PI * 0.5 + a * 0.65;              // около "юг", люлее се изток-запад
+  const night = nightAmount();
+  return {
+    dx: Math.cos(ang), dy: Math.sin(ang),
+    len: 0.8 + 1.0 * Math.abs(a),
+    alpha: (1 - night) * 0.42
+  };
+}
+// Сенки от сгради и дървета — рисуват се плътно върху отделен слой,
+// после се наслагват с една прозрачност (без двойно затъмняване)
+function drawShadows() {
+  const sun = sunState();
+  if (sun.alpha < 0.03) return;
+  const sc = shadowCanvas.getContext('2d');
+  sc.setTransform(0.5, 0, 0, 0.5, 0, 0);
+  sc.clearRect(0, 0, VW, VH);
+  sc.fillStyle = '#000';
+  const halfW = VW / 2 / camZoom, halfH = VH / 2 / camZoom;
+  const minTx = Math.floor((camX - halfW) / TILE) - 3, maxTx = Math.floor((camX + halfW) / TILE) + 3;
+  const minTy = Math.floor((camY - halfH) / TILE) - 3, maxTy = Math.floor((camY + halfH) / TILE) + 3;
+  for (let ty = minTy; ty <= maxTy; ty++) {
+    for (let tx = minTx; tx <= maxTx; tx++) {
+      const t = tileAt(tx, ty);
+      if (t === T.BUILD) {
+        const h = blockHeight[blockKeyOf(tx, ty)] || 1;
+        const s = worldToScreen(tx * TILE, ty * TILE);
+        const sz = TILE * camZoom + 1;
+        const ox = sun.dx * h * 19 * camZoom * sun.len;
+        const oy = sun.dy * h * 19 * camZoom * sun.len;
+        const x0 = s.x, y0 = s.y, x1 = s.x + sz, y1 = s.y + sz;
+        sc.beginPath();
+        if (sun.dx >= 0) {
+          sc.moveTo(x0, y0); sc.lineTo(x1, y0); sc.lineTo(x1 + ox, y0 + oy);
+          sc.lineTo(x1 + ox, y1 + oy); sc.lineTo(x0 + ox, y1 + oy); sc.lineTo(x0, y1);
+        } else {
+          sc.moveTo(x1, y0); sc.lineTo(x0, y0); sc.lineTo(x0 + ox, y0 + oy);
+          sc.lineTo(x0 + ox, y1 + oy); sc.lineTo(x1 + ox, y1 + oy); sc.lineTo(x1, y1);
+        }
+        sc.closePath();
+        sc.fill();
+      } else if (t === T.PARK && hash2(tx, ty) > 0.72) {
+        const wx = tx * TILE + TILE / 2 + (hash2(tx + 9, ty) - 0.5) * 22;
+        const wy = ty * TILE + TILE / 2 + (hash2(tx, ty + 9) - 0.5) * 22;
+        const s = worldToScreen(wx, wy);
+        sc.beginPath();
+        sc.ellipse(s.x + sun.dx * 16 * camZoom * sun.len, s.y + sun.dy * 16 * camZoom * sun.len,
+          10 * camZoom, 8 * camZoom, 0, 0, Math.PI * 2);
+        sc.fill();
+      }
+    }
+  }
+  ctx.globalAlpha = sun.alpha;
+  ctx.drawImage(shadowCanvas, 0, 0, shadowCanvas.width, shadowCanvas.height, 0, 0, VW, VH);
+  ctx.globalAlpha = 1;
+}
 function switchCity() {
   genCityMap((cityIdx + 1) % THEMES.length);
   player.car = null; player.onTrain = null;
@@ -1555,10 +1663,42 @@ function drawGround() {
       ctx.fillStyle = fill;
       ctx.fillRect(s.x, s.y, sz, sz);
 
+      // Текстурен слой — зърно като на въздушна снимка (подравнено между съседни плочки)
+      const gsx = (tx & 3) * 48, gsy = (ty & 3) * 48;
+      if (t === T.WATER) {
+        ctx.globalAlpha = 0.3;
+        ctx.drawImage(TEX.organic, gsx, gsy, 48, 48, s.x, s.y, sz, sz);
+        ctx.globalAlpha = 1;
+      } else if (t === T.GRASS || t === T.PARK) {
+        ctx.globalAlpha = 0.75;
+        ctx.drawImage(TEX.organic, gsx, gsy, 48, 48, s.x, s.y, sz, sz);
+        ctx.globalAlpha = 1;
+      } else if (t !== T.BUILD) {
+        ctx.globalAlpha = 0.65;
+        ctx.drawImage(TEX.grain, gsx, gsy, 48, 48, s.x, s.y, sz, sz);
+        ctx.globalAlpha = 1;
+      }
+
       if (t === T.ROAD) {
         const inter = isRoadRow(ty) && isRoadCol(tx);
         const my = ty % BLOCK, mx = tx % BLOCK;
         if (!inter) {
+          // Износване от гуми по лентите
+          ctx.fillStyle = 'rgba(0,0,0,0.10)';
+          if (isRoadRow(ty)) {
+            ctx.fillRect(s.x, s.y + sz * 0.2, sz, sz * 0.16);
+            ctx.fillRect(s.x, s.y + sz * 0.64, sz, sz * 0.16);
+          } else {
+            ctx.fillRect(s.x + sz * 0.2, s.y, sz * 0.16, sz);
+            ctx.fillRect(s.x + sz * 0.64, s.y, sz * 0.16, sz);
+          }
+          // Кръпки и петна от масло
+          if (h > 0.88) {
+            ctx.fillStyle = 'rgba(0,0,0,0.14)';
+            ctx.beginPath();
+            ctx.ellipse(s.x + sz * (0.3 + h * 0.4), s.y + sz * 0.5, sz * 0.16, sz * 0.1, h * 3, 0, Math.PI * 2);
+            ctx.fill();
+          }
           // Осева линия
           ctx.fillStyle = theme.lane;
           if (my === 4 && isRoadRow(ty)) {
@@ -1597,6 +1737,13 @@ function drawGround() {
         const ph = Math.sin(gameT * 1.5 + tx * 0.7 + ty * 1.3) * 0.5 + 0.5;
         ctx.fillStyle = 'rgba(120,170,220,' + (0.05 + ph * 0.06) + ')';
         ctx.fillRect(s.x, s.y + sz * (0.3 + 0.3 * ph), sz, 2 * camZoom);
+        // Пяна край брега
+        const foam = 0.28 + 0.14 * Math.sin(gameT * 2 + tx * 1.7 + ty);
+        ctx.fillStyle = 'rgba(215,232,242,' + foam + ')';
+        if (tileAt(tx, ty - 1) !== T.WATER) ctx.fillRect(s.x, s.y, sz, 2.5 * camZoom);
+        if (tileAt(tx, ty + 1) !== T.WATER) ctx.fillRect(s.x, s.y + sz - 2.5 * camZoom, sz, 2.5 * camZoom);
+        if (tileAt(tx - 1, ty) !== T.WATER) ctx.fillRect(s.x, s.y, 2.5 * camZoom, sz);
+        if (tileAt(tx + 1, ty) !== T.WATER) ctx.fillRect(s.x + sz - 2.5 * camZoom, s.y, 2.5 * camZoom, sz);
       } else if (t === T.PARK) {
         if (h > 0.85) {
           ctx.fillStyle = 'rgba(70,110,60,0.6)';
@@ -1703,98 +1850,189 @@ function drawPickups() {
   }
 }
 
+// ---------- Реалистични спрайтове на коли (кеширани) ----------
+const carSpriteCache = new Map();
+function rrPath(g, x, y, w, h, r) {
+  g.beginPath();
+  g.moveTo(x + r, y);
+  g.lineTo(x + w - r, y); g.quadraticCurveTo(x + w, y, x + w, y + r);
+  g.lineTo(x + w, y + h - r); g.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  g.lineTo(x + r, y + h); g.quadraticCurveTo(x, y + h, x, y + h - r);
+  g.lineTo(x, y + r); g.quadraticCurveTo(x, y, x + r, y);
+  g.closePath();
+}
+function glassPane(g, x, y, w, h) {
+  g.fillStyle = '#141f29';
+  g.fillRect(x, y, w, h);
+  const gr = g.createLinearGradient(x, y, x + w, y + h);
+  gr.addColorStop(0, 'rgba(190,225,245,0.5)');
+  gr.addColorStop(0.35, 'rgba(190,225,245,0.06)');
+  gr.addColorStop(1, 'rgba(120,165,195,0.28)');
+  g.fillStyle = gr;
+  g.fillRect(x, y, w, h);
+}
+function getCarSprite(kind, color, burned) {
+  const key = kind + '|' + color + (burned ? '|b' : '');
+  let s = carSpriteCache.get(key);
+  if (!s) { s = renderCarSprite(kind, color, burned); carSpriteCache.set(key, s); }
+  return s;
+}
+function renderCarSprite(kind, color, burned) {
+  const k = CAR_KINDS[kind];
+  const SS = 4, L = k.l, W = k.w;
+  const c = makeCanvas(Math.ceil(L * SS), Math.ceil(W * SS));
+  const g = c.getContext('2d');
+  g.scale(SS, SS);
+  const body = burned ? '#212122' : color;
+
+  // Основа на купето
+  rrPath(g, 0, 0, L, W, 5);
+  g.fillStyle = body; g.fill();
+  // Странична кривина: светло откъм слънцето, тъмно долу
+  let grad = g.createLinearGradient(0, 0, 0, W);
+  grad.addColorStop(0, 'rgba(255,255,255,0.32)');
+  grad.addColorStop(0.28, 'rgba(255,255,255,0.05)');
+  grad.addColorStop(0.72, 'rgba(0,0,0,0.05)');
+  grad.addColorStop(1, 'rgba(0,0,0,0.32)');
+  rrPath(g, 0, 0, L, W, 5); g.fillStyle = grad; g.fill();
+  // Надлъжен блясък на лака
+  grad = g.createLinearGradient(0, 0, L, 0);
+  grad.addColorStop(0, 'rgba(0,0,0,0.14)');
+  grad.addColorStop(0.55, 'rgba(255,255,255,0.12)');
+  grad.addColorStop(1, 'rgba(0,0,0,0.12)');
+  rrPath(g, 0, 0, L, W, 5); g.fillStyle = grad; g.fill();
+
+  // Колела (загатнати арки отстрани)
+  g.fillStyle = 'rgba(10,10,12,0.55)';
+  for (const wx of [L * 0.14, L * 0.76]) {
+    g.fillRect(wx, -0.2, L * 0.11, 1.6);
+    g.fillRect(wx, W - 1.4, L * 0.11, 1.6);
+  }
+
+  if (kind === 'bus') {
+    glassPane(g, L - 7, 2.5, 4.5, W - 5);                      // предно стъкло
+    for (let i = 0; i < 6; i++) {                              // странични прозорци
+      const x = 5 + i * (L - 16) / 6;
+      glassPane(g, x, 1.2, (L - 20) / 6, 2.6);
+      glassPane(g, x, W - 3.8, (L - 20) / 6, 2.6);
+    }
+    g.fillStyle = shade(body, 0.82);                           // климатик на покрива
+    g.fillRect(L * 0.2, W / 2 - 3, L * 0.45, 6);
+    g.fillStyle = 'rgba(255,255,255,0.12)';
+    g.fillRect(L * 0.2, W / 2 - 3, L * 0.45, 1.6);
+  } else if (kind === 'truck') {
+    glassPane(g, L * 0.72, 2.5, 4, W - 5);                     // кабина
+    g.fillStyle = shade(body, 0.66);                           // контейнер
+    g.fillRect(2, 1.5, L * 0.62, W - 3);
+    g.strokeStyle = 'rgba(0,0,0,0.3)'; g.lineWidth = 0.8;
+    g.strokeRect(2, 1.5, L * 0.62, W - 3);
+    g.strokeStyle = 'rgba(0,0,0,0.18)';
+    for (let x = 6; x < L * 0.62; x += 5) {                    // ребра на контейнера
+      g.beginPath(); g.moveTo(x, 1.5); g.lineTo(x, W - 1.5); g.stroke();
+    }
+  } else {
+    // Седан / спортна / такси / патрулка
+    const cabX0 = kind === 'sport' ? L * 0.24 : L * 0.28;
+    const cabX1 = kind === 'sport' ? L * 0.66 : L * 0.72;
+    if (kind === 'police') {
+      g.fillStyle = '#f2f2f5';
+      g.fillRect(L * 0.30, 0.8, L * 0.34, W - 1.6);
+    }
+    if (kind === 'taxi') {
+      g.fillStyle = '#181818';                                  // шахматна лента
+      for (let x = 3; x < L - 3; x += 4) {
+        g.fillRect(x, 0.6, 2, 1.2);
+        g.fillRect(x + 2, W - 1.8, 2, 1.2);
+      }
+    }
+    glassPane(g, cabX0, 2, cabX1 - cabX0, W - 4);              // стъклен пръстен
+    g.fillStyle = kind === 'police' ? '#e8e8ee' : shade(body, 0.86);  // покрив
+    g.fillRect(cabX0 + (cabX1 - cabX0) * 0.32, 3.2, (cabX1 - cabX0) * 0.42, W - 6.4);
+    grad = g.createLinearGradient(0, 3, 0, W - 3);             // обем на покрива
+    grad.addColorStop(0, 'rgba(255,255,255,0.22)');
+    grad.addColorStop(1, 'rgba(0,0,0,0.18)');
+    g.fillStyle = grad;
+    g.fillRect(cabX0 + (cabX1 - cabX0) * 0.32, 3.2, (cabX1 - cabX0) * 0.42, W - 6.4);
+    g.strokeStyle = 'rgba(0,0,0,0.22)';                        // фуги на капака и багажника
+    g.lineWidth = 0.7;
+    g.beginPath(); g.moveTo(L * 0.8, 1); g.lineTo(L * 0.8, W - 1); g.stroke();
+    g.beginPath(); g.moveTo(L * 0.2, 1); g.lineTo(L * 0.2, W - 1); g.stroke();
+    if (kind === 'taxi') {
+      g.fillStyle = '#111';                                     // табела на покрива
+      g.fillRect(L * 0.44, W / 2 - 3.6, 6, 7.2);
+      g.fillStyle = '#ffd23c';
+      g.fillRect(L * 0.44 + 1.2, W / 2 - 1.4, 3.6, 2.8);
+    }
+  }
+
+  // Фарове и стопове
+  g.fillStyle = burned ? '#333' : '#fff4c8';
+  g.fillRect(L - 2.6, 1.6, 2.2, 3.6);
+  g.fillRect(L - 2.6, W - 5.2, 2.2, 3.6);
+  g.fillStyle = burned ? '#333' : '#b81f1f';
+  g.fillRect(0.4, 1.6, 1.8, 3.6);
+  g.fillRect(0.4, W - 5.2, 1.8, 3.6);
+
+  // Контур (сглобки)
+  rrPath(g, 0.4, 0.4, L - 0.8, W - 0.8, 5);
+  g.strokeStyle = 'rgba(0,0,0,0.45)';
+  g.lineWidth = 0.8;
+  g.stroke();
+
+  if (burned) {
+    rrPath(g, 0, 0, L, W, 5);
+    g.fillStyle = 'rgba(12,12,14,0.68)'; g.fill();
+    g.fillStyle = 'rgba(60,50,40,0.5)';
+    for (let i = 0; i < 6; i++) {
+      g.beginPath();
+      g.arc(4 + (i * 137) % (L - 8), 3 + (i * 71) % (W - 6), 2.4, 0, Math.PI * 2);
+      g.fill();
+    }
+  }
+  return c;
+}
+
 function drawCar(c) {
   const s = worldToScreen(c.x, c.y);
   const margin = 100;
   if (s.x < -margin || s.y < -margin || s.x > VW + margin || s.y > VH + margin) return;
+  const L = c.l, W = c.w;
+  const sun = sunState();
+  const shx = (1 + sun.dx * 4 * sun.len * (sun.alpha * 3)) * camZoom;
+  const shy = (1 + sun.dy * 4 * sun.len * (sun.alpha * 3)) * camZoom;
+
+  // Сянка по посока на слънцето
+  ctx.save();
+  ctx.translate(s.x + shx, s.y + shy);
+  ctx.rotate(c.angle);
+  ctx.scale(camZoom, camZoom);
+  rrPath(ctx, -L / 2, -W / 2, L, W, 6);
+  ctx.fillStyle = 'rgba(0,0,0,0.32)';
+  ctx.fill();
+  ctx.restore();
+
+  // Купе (кеширан спрайт)
   ctx.save();
   ctx.translate(s.x, s.y);
   ctx.rotate(c.angle);
   ctx.scale(camZoom, camZoom);
-  const L = c.l, W = c.w;
-
-  ctx.fillStyle = 'rgba(0,0,0,0.32)';
-  ctx.fillRect(-L / 2 + 3, -W / 2 + 3, L, W);
-
-  if (c.dead) {
-    ctx.fillStyle = '#1c1c1e';
-    ctx.fillRect(-L / 2, -W / 2, L, W);
-    ctx.fillStyle = '#0e0e10';
-    ctx.fillRect(-L / 6, -W / 2 + 3, L / 3.2, W - 6);
-    ctx.restore();
-    return;
-  }
-
-  const dmg = c.hp / c.maxHp;
-  const bodyColor = dmg < 0.45 ? shade(c.color, 0.6 + dmg * 0.6) : c.color;
-
-  // Купе със заоблени ъгли
-  const r = 5;
-  ctx.fillStyle = bodyColor;
-  ctx.beginPath();
-  ctx.moveTo(-L / 2 + r, -W / 2);
-  ctx.lineTo(L / 2 - r, -W / 2); ctx.quadraticCurveTo(L / 2, -W / 2, L / 2, -W / 2 + r);
-  ctx.lineTo(L / 2, W / 2 - r); ctx.quadraticCurveTo(L / 2, W / 2, L / 2 - r, W / 2);
-  ctx.lineTo(-L / 2 + r, W / 2); ctx.quadraticCurveTo(-L / 2, W / 2, -L / 2, W / 2 - r);
-  ctx.lineTo(-L / 2, -W / 2 + r); ctx.quadraticCurveTo(-L / 2, -W / 2, -L / 2 + r, -W / 2);
-  ctx.fill();
-  // Светлосенки по купето
-  ctx.fillStyle = 'rgba(255,255,255,0.16)';
-  ctx.fillRect(-L / 2 + 2, -W / 2 + 1.5, L - 4, 3);
-  ctx.fillStyle = 'rgba(0,0,0,0.18)';
-  ctx.fillRect(-L / 2 + 2, W / 2 - 4.5, L - 4, 3);
-
-  if (c.kind === 'bus') {
-    // Прозорци по дължина
-    ctx.fillStyle = 'rgba(160,210,240,0.85)';
-    for (let k = 0; k < 5; k++) ctx.fillRect(-L / 2 + 8 + k * (L - 18) / 5, -W / 2 + 3, (L - 22) / 5 - 3, 4);
-    for (let k = 0; k < 5; k++) ctx.fillRect(-L / 2 + 8 + k * (L - 18) / 5, W / 2 - 7, (L - 22) / 5 - 3, 4);
-    ctx.fillStyle = 'rgba(20,30,40,0.75)';
-    ctx.fillRect(L / 2 - 8, -W / 2 + 3, 5, W - 6);
-  } else if (c.kind === 'truck') {
-    // Кабина + каросерия
-    ctx.fillStyle = 'rgba(20,30,40,0.75)';
-    ctx.fillRect(L / 2 - 16, -W / 2 + 3, 7, W - 6);
-    ctx.fillStyle = shade(bodyColor, 0.75);
-    ctx.fillRect(-L / 2 + 3, -W / 2 + 2, L / 2 + 4, W - 4);
-    ctx.strokeStyle = 'rgba(0,0,0,0.25)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(-L / 2 + 3, -W / 2 + 2, L / 2 + 4, W - 4);
-  } else {
-    // Покрив + предно/задно стъкло
-    ctx.fillStyle = shade(bodyColor, 0.8);
-    ctx.fillRect(-L / 6 - 2, -W / 2 + 3, L / 2.6, W - 6);
-    ctx.fillStyle = 'rgba(160,210,240,0.9)';
-    ctx.fillRect(L / 6 - 1, -W / 2 + 3.5, 4, W - 7);
-    ctx.fillStyle = 'rgba(130,180,215,0.8)';
-    ctx.fillRect(-L / 6 - 4, -W / 2 + 3.5, 3, W - 7);
-  }
-
-  // Фарове и стопове
-  ctx.fillStyle = '#ffe9a0';
-  ctx.fillRect(L / 2 - 3, -W / 2 + 2, 3, 4);
-  ctx.fillRect(L / 2 - 3, W / 2 - 6, 3, 4);
-  ctx.fillStyle = '#c22';
-  ctx.fillRect(-L / 2, -W / 2 + 2, 2, 4);
-  ctx.fillRect(-L / 2, W / 2 - 6, 2, 4);
-
-  if (c.kind === 'police') {
-    ctx.fillStyle = '#fff';
-    ctx.fillRect(-L / 8, -W / 2, L / 4, W);
-    ctx.fillStyle = '#123';
-    ctx.font = 'bold 7px sans-serif';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    const on = Math.floor(c.siren) % 2 === 0;
-    ctx.fillStyle = on ? '#f33' : '#33f';
-    ctx.fillRect(-5, -5, 9, 4);
-    ctx.fillStyle = on ? '#33f' : '#f33';
-    ctx.fillRect(-5, 1, 9, 4);
-  }
-  if (c.kind === 'taxi') {
-    ctx.fillStyle = '#111';
-    ctx.fillRect(-3, -4, 7, 8);
-    ctx.fillStyle = '#e8b800';
-    ctx.font = 'bold 6px sans-serif';
+  ctx.drawImage(getCarSprite(c.kind, c.color, c.dead), -L / 2, -W / 2, L, W);
+  if (!c.dead) {
+    const dmg = c.hp / c.maxHp;
+    if (dmg < 0.6) {
+      // Вдлъбнатини и сажди при щети
+      ctx.fillStyle = 'rgba(20,20,22,' + (0.5 - dmg * 0.6) + ')';
+      ctx.beginPath(); ctx.arc(L * 0.3, -W * 0.24, 3.2, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(-L * 0.28, W * 0.2, 2.6, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(L * 0.05, W * 0.05, 2.2, 0, Math.PI * 2); ctx.fill();
+    }
+    if (c.kind === 'police') {
+      const on = Math.floor(c.siren) % 2 === 0;
+      ctx.fillStyle = on ? '#ff3b30' : '#2660ff';
+      ctx.fillRect(-4.5, -4.5, 9, 3.6);
+      ctx.fillStyle = on ? '#2660ff' : '#ff3b30';
+      ctx.fillRect(-4.5, 0.9, 9, 3.6);
+    }
   }
   ctx.restore();
 
@@ -2004,35 +2242,66 @@ function drawBuildings() {
       }
     }
 
-    // Покрив
+    // Покрив (проекцията запазва правоъгълника — рисуваме текстуриран правоъгълник)
+    const rx = rf[0].x, ry = rf[0].y, rw = rf[2].x - rf[0].x, rh = rf[2].y - rf[0].y;
     ctx.fillStyle = roof;
-    ctx.beginPath();
-    ctx.moveTo(rf[0].x, rf[0].y);
-    ctx.lineTo(rf[1].x, rf[1].y);
-    ctx.lineTo(rf[2].x, rf[2].y);
-    ctx.lineTo(rf[3].x, rf[3].y);
-    ctx.closePath();
-    ctx.fill();
-    // Ръб на покрива
-    ctx.strokeStyle = 'rgba(255,255,255,0.09)';
-    ctx.lineWidth = 1;
-    ctx.stroke();
+    ctx.fillRect(rx, ry, rw, rh);
+    // Чакълеста текстура (подравнена, за да няма шевове между плочките)
+    ctx.globalAlpha = 0.6;
+    ctx.drawImage(TEX.grain, (tx & 3) * 48, (ty & 3) * 48, 48, 48, rx, ry, rw, rh);
+    ctx.globalAlpha = 1;
+    // Парапет — само по външните ръбове на сградата (не между плочките)
+    ctx.lineWidth = Math.max(1, 2.2 * camZoom);
+    for (const e of edges) {
+      const ntx = tx + e.nx, nty = ty + e.ny;
+      if (tileAt(ntx, nty) === T.BUILD && blockKeyOf(ntx, nty) === key) continue;
+      ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+      ctx.beginPath();
+      ctx.moveTo(rf[e.a].x, rf[e.a].y);
+      ctx.lineTo(rf[e.b].x, rf[e.b].y);
+      ctx.stroke();
+      // Светъл вътрешен кант на парапета
+      ctx.strokeStyle = 'rgba(255,255,255,0.13)';
+      const inset = 2.5 * camZoom;
+      ctx.beginPath();
+      ctx.moveTo(rf[e.a].x - e.nx * inset, rf[e.a].y - e.ny * inset);
+      ctx.lineTo(rf[e.b].x - e.nx * inset, rf[e.b].y - e.ny * inset);
+      ctx.stroke();
+    }
 
     // Детайли на покрива (детерминистични)
     const hh = hash2(tx, ty);
-    const rcx = (rf[0].x + rf[2].x) / 2, rcy = (rf[0].y + rf[2].y) / 2;
-    const rsz = TILE * camZoom * (1 + f);
-    if (hh > 0.75) {
-      ctx.fillStyle = shade(roof, 0.8);
+    const rcx = rx + rw / 2, rcy = ry + rh / 2;
+    const rsz = Math.min(rw, rh);
+    if (hh > 0.78) {
+      // Климатик с перка и сянка
+      ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      ctx.fillRect(rcx - rsz * 0.15 + 2 * camZoom, rcy - rsz * 0.12 + 2 * camZoom, rsz * 0.32, rsz * 0.26);
+      ctx.fillStyle = shade(roof, 1.25);
       ctx.fillRect(rcx - rsz * 0.16, rcy - rsz * 0.13, rsz * 0.32, rsz * 0.26);
-      ctx.fillStyle = shade(roof, 1.15);
-      ctx.fillRect(rcx - rsz * 0.16, rcy - rsz * 0.13, rsz * 0.32, rsz * 0.05);
-    } else if (hh > 0.6) {
-      ctx.fillStyle = shade(roof, 0.7);
-      ctx.beginPath(); ctx.arc(rcx + rsz * 0.15, rcy, rsz * 0.09, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(rcx - rsz * 0.16, rcy - rsz * 0.13, rsz * 0.32, rsz * 0.26);
+      ctx.beginPath();
+      ctx.arc(rcx, rcy, rsz * 0.07, 0, Math.PI * 2);
+      ctx.fillStyle = shade(roof, 0.55);
+      ctx.fill();
+    } else if (hh > 0.62) {
+      // Капандура (стъклен люк)
+      ctx.fillStyle = 'rgba(0,0,0,0.28)';
+      ctx.fillRect(rcx - rsz * 0.14 + 1.5 * camZoom, rcy - rsz * 0.1 + 1.5 * camZoom, rsz * 0.3, rsz * 0.2);
+      const gl = ctx.createLinearGradient(rcx - rsz * 0.14, rcy - rsz * 0.1, rcx + rsz * 0.16, rcy + rsz * 0.1);
+      gl.addColorStop(0, '#9cc4dc'); gl.addColorStop(1, '#3a586e');
+      ctx.fillStyle = gl;
+      ctx.fillRect(rcx - rsz * 0.14, rcy - rsz * 0.1, rsz * 0.3, rsz * 0.2);
+    } else if (hh > 0.5) {
+      // Вентилационни тръби
+      ctx.fillStyle = 'rgba(0,0,0,0.25)';
+      ctx.beginPath(); ctx.arc(rcx + rsz * 0.16 + camZoom, rcy - rsz * 0.1 + camZoom, rsz * 0.06, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = shade(roof, 0.6);
+      ctx.beginPath(); ctx.arc(rcx + rsz * 0.16, rcy - rsz * 0.1, rsz * 0.06, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(rcx - rsz * 0.12, rcy + rsz * 0.14, rsz * 0.045, 0, Math.PI * 2); ctx.fill();
     }
-    // Специални покриви
-    if (key === hospitalBlock && hh > 0.9) { /* центърът се маркира по-долу */ }
   }
 
   // Знаци на специалните сгради (над входовете им)
@@ -2561,10 +2830,12 @@ function drawStartScreen() {
 
 // ---------------- Главен цикъл ----------------
 let lastT = performance.now();
+let fpsEMA = 60;
 function frame(now) {
   requestAnimationFrame(frame);
   let dt = (now - lastT) / 1000;
   lastT = now;
+  if (dt > 0.001) fpsEMA += (1 / dt - fpsEMA) * 0.05;
   if (dt > 0.1) dt = 0.1;
 
   if (!started) { drawStartScreen(); return; }
@@ -2621,6 +2892,7 @@ function frame(now) {
 
   // ---- Рендер ----
   drawGround();
+  drawShadows();            // слънчеви сенки от сгради и дървета
   drawSkids();
   drawPhonesShops();
   drawPickups();
@@ -2640,6 +2912,20 @@ function frame(now) {
     ctx.fillRect(0, 0, VW, VH);
   }
 
+  // "Дрон" пост-обработка: златист час, филмово зърно, винетка
+  const sunNow = sunState();
+  if (sunNow.alpha > 0.05 && sunNow.len > 1.4) {
+    ctx.fillStyle = 'rgba(255,180,90,' + ((sunNow.len - 1.4) * 0.22) + ')';
+    ctx.fillRect(0, 0, VW, VH);
+  }
+  ctx.globalAlpha = 0.4;
+  const gox = -((Math.random() * 256) | 0), goy = -((Math.random() * 256) | 0);
+  for (let gy = goy; gy < VH; gy += 256)
+    for (let gx = gox; gx < VW; gx += 256)
+      ctx.drawImage(TEX.grain, gx, gy);
+  ctx.globalAlpha = 1;
+  ctx.drawImage(TEX.vignette, 0, 0, VW, VH);
+
   drawMiniMap();
   drawHUD();
 }
@@ -2653,6 +2939,9 @@ window.__gc = {
   get themeName() { return theme.name; },
   get cars() { return cars; },
   get score() { return score; },
+  get fps() { return fpsEMA; },
+  get sun() { return sunState(); },
+  setTime(t) { gameT = t; },
   teleport(x, y) { player.x = x; player.y = y; camX = x; camY = y; },
   cheatScore(n) { addScore(n); },
   forceStart() { started = true; }
