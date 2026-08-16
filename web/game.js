@@ -875,6 +875,16 @@ let skidActive = false;  // играчът поднася в момента (з�
 
 let camX = 0, camY = 0, camZoom = 1;
 let gameT = 0, paused = false, started = false;
+let startCityButtons = [];   // зони за избор на град на стартовия екран
+function startWithCity(i) {
+  if (i !== cityIdx) {
+    genCityMap(i);
+    playerToStart();
+    spawnWorld();
+  }
+  started = true;
+  AudioSys.init();
+}
 let message = null, messageT = 0;
 let scoreBest = 0;
 try { scoreBest = parseInt(localStorage.getItem('gangcity_best') || '0', 10) || 0; } catch (e) {}
@@ -1405,7 +1415,12 @@ let actionPressed = false;
 window.addEventListener('keydown', e => {
   if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) e.preventDefault();
   keys[e.key.toLowerCase()] = true;
-  if (!started) { started = true; AudioSys.init(); }
+  if (!started) {
+    // Цифра 1-5 избира начален град, всеки друг клавиш стартира от първия
+    const n = parseInt(e.key, 10);
+    startWithCity(!isNaN(n) && n >= 1 && n <= THEMES.length ? n - 1 : cityIdx);
+    return;
+  }
   if (gameOver) { restartGame(); return; }
   if (e.key.toLowerCase() === 'e' || e.key === 'Enter') actionPressed = true;
   if (e.key.toLowerCase() === 'q') cycleWeapon();
@@ -1434,7 +1449,19 @@ window.addEventListener('resize', () => touch.layout());
 
 function touchStart(e) {
   e.preventDefault();
-  if (!started) { started = true; AudioSys.init(); return; }
+  if (!started) {
+    // Докосване върху име на град го избира за начален
+    const t0 = e.changedTouches[0];
+    let picked = cityIdx;
+    for (const b of startCityButtons) {
+      if (t0.clientX >= b.x && t0.clientX <= b.x + b.w && t0.clientY >= b.y && t0.clientY <= b.y + b.h) {
+        picked = b.idx;
+        break;
+      }
+    }
+    startWithCity(picked);
+    return;
+  }
   if (gameOver) { restartGame(); return; }
   for (const t of e.changedTouches) {
     const x = t.clientX, y = t.clientY;
@@ -1485,9 +1512,17 @@ canvas.addEventListener('touchstart', touchStart, { passive: false });
 canvas.addEventListener('touchmove', touchMove, { passive: false });
 canvas.addEventListener('touchend', touchEnd, { passive: false });
 canvas.addEventListener('touchcancel', touchEnd, { passive: false });
-canvas.addEventListener('mousedown', () => {
-  if (!started) { started = true; AudioSys.init(); }
-  else if (gameOver) restartGame();
+canvas.addEventListener('mousedown', e => {
+  if (!started) {
+    let picked = cityIdx;
+    for (const b of startCityButtons) {
+      if (e.clientX >= b.x && e.clientX <= b.x + b.w && e.clientY >= b.y && e.clientY <= b.y + b.h) {
+        picked = b.idx;
+        break;
+      }
+    }
+    startWithCity(picked);
+  } else if (gameOver) restartGame();
 });
 
 function inputState() {
@@ -3709,9 +3744,40 @@ function drawStartScreen() {
   ctx.font = 'bold ' + Math.min(64, VW * 0.1) + 'px sans-serif';
   ctx.fillStyle = '#ffd23c';
   ctx.fillText('GANG CITY', VW / 2, VH * 0.22);
-  ctx.font = 'bold 17px sans-serif';
-  ctx.fillStyle = '#7ab6ff';
-  ctx.fillText(THEMES.map(t => t.name).join(' → '), VW / 2, VH * 0.31);
+  // Избор на начален град — редове с бутони
+  startCityButtons = [];
+  ctx.font = 'bold 15px sans-serif';
+  const bh = 30, gap = 10;
+  const widths = THEMES.map(t => ctx.measureText((THEMES.indexOf(t) + 1) + '. ' + t.name).width + 20);
+  // Разпредели в редове, които се събират на екрана
+  const rows = [[]];
+  let rowW = 0;
+  THEMES.forEach((t, i) => {
+    if (rowW + widths[i] + gap > VW - 24 && rows[rows.length - 1].length) { rows.push([]); rowW = 0; }
+    rows[rows.length - 1].push(i);
+    rowW += widths[i] + gap;
+  });
+  let by = VH * 0.30 - 12;
+  for (const row of rows) {
+    const total = row.reduce((a, i) => a + widths[i], 0) + gap * (row.length - 1);
+    let bx = VW / 2 - total / 2;
+    for (const i of row) {
+      const sel = i === cityIdx;
+      ctx.fillStyle = sel ? 'rgba(122,182,255,0.25)' : 'rgba(255,255,255,0.07)';
+      ctx.fillRect(bx, by, widths[i], bh);
+      ctx.strokeStyle = sel ? '#7ab6ff' : 'rgba(255,255,255,0.3)';
+      ctx.lineWidth = sel ? 2 : 1;
+      ctx.strokeRect(bx, by, widths[i], bh);
+      ctx.fillStyle = sel ? '#cfe4ff' : '#ccc';
+      ctx.fillText((i + 1) + '. ' + THEMES[i].name, bx + widths[i] / 2, by + bh / 2);
+      startCityButtons.push({ x: bx, y: by, w: widths[i], h: bh, idx: i });
+      bx += widths[i] + gap;
+    }
+    by += bh + 8;
+  }
+  ctx.font = '13px sans-serif';
+  ctx.fillStyle = '#8aa';
+  ctx.fillText(IS_TOUCH ? 'Докосни град, за да започнеш от него' : 'Натисни 1–' + THEMES.length + ', за да избереш начален град', VW / 2, by + 4);
   ctx.font = '15px sans-serif';
   ctx.fillStyle = '#ccc';
   const lines = IS_TOUCH ? [
@@ -3735,10 +3801,10 @@ function drawStartScreen() {
     '',
     'Натисни клавиш, за да започнеш'
   ];
-  lines.forEach((l, i) => ctx.fillText(l, VW / 2, VH * 0.42 + i * 24));
+  lines.forEach((l, i) => ctx.fillText(l, VW / 2, VH * 0.5 + i * 22));
   if (scoreBest > 0) {
     ctx.fillStyle = '#7ee08a';
-    ctx.fillText('Рекорд: ' + fmtMoney(scoreBest), VW / 2, VH * 0.42 + lines.length * 24 + 18);
+    ctx.fillText('Рекорд: ' + fmtMoney(scoreBest), VW / 2, VH * 0.5 + lines.length * 22 + 16);
   }
   ctx.textBaseline = 'top';
 }
