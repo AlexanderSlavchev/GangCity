@@ -871,6 +871,77 @@ const gour = { count: 0, timer: 0 };
 let resprayCooldown = 0;
 let levelCompleteT = 0, gameOver = false;
 let citySwitchPending = false, travelToName = '';
+// ---------------- Фонова музика (mp3 с кросфейд) ----------------
+const MusicSys = {
+  tracks: ['audio/track0.mp3','audio/track1.mp3','audio/track2.mp3',
+           'audio/track3.mp3','audio/track4.mp3','audio/track5.mp3'],
+  bufs: {}, cur: null, idx: 0, fading: false, on: true, timer: null, pausedAt: null,
+  FADE: 3.5, VOL: 0.16,
+  start() {
+    if (this.timer || !AudioSys.ctx) return;
+    this.bus = AudioSys.ctx.createGain();
+    this.bus.gain.value = this.VOL;
+    this.bus.connect(AudioSys.master);
+    this.play(0, false, 0);
+    this.timer = setInterval(() => {
+      if (!this.on || this.fading || !this.cur) return;
+      const played = this.cur.off + (AudioSys.ctx.currentTime - this.cur.t0);
+      if (played > this.cur.dur - this.FADE) {
+        this.fading = true;
+        const next = (this.cur.idx + 1) % this.tracks.length;
+        this.fadeOut();
+        this.play(next, true, 0);
+        setTimeout(() => { this.fading = false; }, this.FADE * 1000 + 250);
+      }
+    }, 400);
+  },
+  load(i, cb) {
+    if (this.bufs[i]) { if (cb) cb(this.bufs[i]); return; }
+    fetch(this.tracks[i])
+      .then(r => { if (!r.ok) throw 0; return r.arrayBuffer(); })
+      .then(ab => AudioSys.ctx.decodeAudioData(ab))
+      .then(buf => { this.bufs[i] = buf; if (cb) cb(buf); })
+      .catch(() => {});
+  },
+  play(i, fadeIn, offset) {
+    this.load(i, buf => {
+      const c = AudioSys.ctx, g = c.createGain(), src = c.createBufferSource();
+      src.buffer = buf; src.connect(g); g.connect(this.bus);
+      const t = c.currentTime;
+      if (fadeIn) { g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(1, t + this.FADE); }
+      else g.gain.setValueAtTime(1, t);
+      src.start(t, offset || 0);
+      this.cur = { src, g, idx: i, t0: t, off: offset || 0, dur: buf.duration };
+      this.idx = i;
+      this.load((i + 1) % this.tracks.length);   // следващата се тегли отрано
+      for (const k in this.bufs)                 // пазим в паметта само текущата и следващата
+        if (+k !== i && +k !== (i + 1) % this.tracks.length) delete this.bufs[k];
+    });
+  },
+  fadeOut() {
+    if (!this.cur) return;
+    const t = AudioSys.ctx.currentTime, c = this.cur;
+    c.g.gain.cancelScheduledValues(t);
+    c.g.gain.setValueAtTime(1, t);
+    c.g.gain.linearRampToValueAtTime(0.0001, t + this.FADE);
+    try { c.src.stop(t + this.FADE + 0.1); } catch (e) {}
+  },
+  toggle() {
+    this.on = !this.on;
+    if (!this.on && this.cur) {
+      this.pausedAt = { idx: this.cur.idx,
+        off: (this.cur.off + (AudioSys.ctx.currentTime - this.cur.t0)) % this.cur.dur };
+      try { this.cur.src.stop(); } catch (e) {}
+      this.cur = null;
+    } else if (this.on && !this.cur) {
+      const p = this.pausedAt || { idx: this.idx, off: 0 };
+      this.play(p.idx, false, p.off);
+      this.pausedAt = null;
+    }
+    return this.on;
+  }
+};
+
 let skidActive = false;  // играчът поднася в момента (за звука)
 
 let camX = 0, camY = 0, camZoom = 1;
@@ -884,6 +955,7 @@ function startWithCity(i) {
   }
   started = true;
   AudioSys.init();
+  MusicSys.start();
 }
 let message = null, messageT = 0;
 let scoreBest = 0;
