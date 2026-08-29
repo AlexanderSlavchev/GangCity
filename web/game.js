@@ -125,6 +125,7 @@ function blockKeyOf(tx, ty) { return Math.floor(tx / BLOCK) + ',' + Math.floor(t
 const THEMES = [
   {
     name: 'София',
+    cast: 'rgb(255,247,230)',   // топло златисто
     sofia: true,
     walls: ['#d9c9a9', '#e6dcc6', '#c9b998', '#b3a890', '#d3c3b3', '#e2d2ba', '#cfc0a4', '#bfae94'],
     roofs: ['#9a5f48', '#a86a50', '#8a6a55', '#7a7068', '#96604a'],
@@ -137,6 +138,7 @@ const THEMES = [
   },
   {
     name: 'Русе',
+    cast: 'rgb(234,247,228)',   // зеленикаво
     ruse: true, freeform: true, lowRise: true,
     walls: ['#e9dfc8', '#dcc9a5', '#e6d6b8', '#d3bb93', '#eae3d3', '#cbb79b', '#e0d2be', '#d8c2a2', '#f0e8d8', '#c4ae8e'],
     roofs: ['#a1573e', '#95513a', '#8a5a46', '#7d6c5a', '#9a6248'],
@@ -148,6 +150,7 @@ const THEMES = [
   },
   {
     name: 'Либърти Сити',
+    cast: 'rgb(228,234,242)',   // студено сиво-синьо
     walls: ['#9a7b64', '#8b8d99', '#ab9070', '#7d8c78', '#997f9e', '#b09a80', '#82909f', '#a58474', '#c0aa8a', '#6f7f8f'],
     roofs: ['#6e6a66', '#7a7672', '#5f6468', '#746e64', '#686e62', '#7e7468'],
     road: ['#3a3a40', '#3d3d43'], side: ['#95959c', '#9a9aa1'],
@@ -157,6 +160,7 @@ const THEMES = [
   },
   {
     name: 'Сан Андреас',
+    cast: 'rgb(252,232,216)',   // червеникава мараня
     walls: ['#e8ccb8', '#d4e0c4', '#f0e2c4', '#c4d8e4', '#e4c8d8', '#f0d2a8', '#d6cab2', '#b8d0c2', '#f4e8d0', '#ccb8a0'],
     roofs: ['#a89078', '#98a088', '#b0a080', '#8a9aa4', '#a4988a', '#9aa48a'],
     road: ['#46464c', '#49494f'], side: ['#b2aa9a', '#b7afa0'],
@@ -166,6 +170,7 @@ const THEMES = [
   },
   {
     name: 'Вайс Сити',
+    cast: 'rgb(250,228,240)',   // розово
     walls: ['#e8a8c0', '#a8d8d0', '#f0d8b0', '#c4b0e0', '#f0b8a8', '#b8e0f0', '#e8e0d0', '#d8b8d8', '#f8d0c8', '#b0c8e8'],
     roofs: ['#95788a', '#7a8a92', '#a08a92', '#8a927a', '#928a9a'],
     road: ['#3e3a42', '#413d45'], side: ['#c2b2a2', '#c7b7a7'],
@@ -1819,12 +1824,20 @@ function updatePlayer(dt, inp) {
 }
 function updatePlayerFoot(dt, inp) {
   const spd = 135;
+  if (isSolid(tileAtPx(player.x, player.y))) {
+    const safe = nearestSideTile(player.x, player.y, 600);
+    if (safe) { player.x = safe.x; player.y = safe.y; }
+  }
   if (inp.mx || inp.my) {
     player.angle = Math.atan2(inp.my, inp.mx);
     const nx = player.x + inp.mx * spd * dt;
     const ny = player.y + inp.my * spd * dt;
     const pos = collideCircle(nx, ny, 9);
-    player.x = pos.x; player.y = pos.y;
+    // Твърда гаранция: центърът никога не стъпва в плътна плочка (вода/сграда).
+    if (!isSolid(tileAtPx(pos.x, pos.y))) { player.x = pos.x; player.y = pos.y; }
+    else if (!isSolid(tileAtPx(nx, player.y))) player.x = nx;   // плъзгане по X
+    else if (!isSolid(tileAtPx(player.x, ny))) player.y = ny;   // плъзгане по Y
+    // иначе оставаме на място
     player.walkT = (player.walkT || 0) + spd * dt * 0.1;
     player.moving = 1;
     // Стъпки
@@ -4072,6 +4085,14 @@ function frame(now) {
   drawBuildings();          // сградите закриват всичко зад тях (както в класиката)
   drawLandmarks();          // куполи, НДК, стадионът, фонтанът
   drawMetro();              // метрото е над всичко — то е надземна линия
+
+  // Цветният подпис на града — лек оттенък върху целия свят (преди нощта и HUD-а)
+  if (theme.cast) {
+    ctx.globalCompositeOperation = 'multiply';
+    ctx.fillStyle = theme.cast;
+    ctx.fillRect(0, 0, VW, VH);
+    ctx.globalCompositeOperation = 'source-over';
+  }
 
   const night = nightAmount();
   if (night > 0.02) {
