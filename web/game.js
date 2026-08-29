@@ -863,19 +863,41 @@ const MusicSys = {
   tracks: ['audio/track0.mp3','audio/track1.mp3','audio/track2.mp3',
            'audio/track3.mp3','audio/track4.mp3','audio/track5.mp3'],
   bufs: {}, cur: null, idx: 0, fading: false, on: true, timer: null, pausedAt: null,
+  order: [], pos: 0,
   FADE: 3.5, VOL: 0.16,
+  shuffle(avoid) {
+    const o = this.tracks.map((_, i) => i);
+    for (let i = o.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const t = o[i]; o[i] = o[j]; o[j] = t;
+    }
+    // новият цикъл да не започва с парчето, което току-що е свършило
+    if (avoid != null && o[0] === avoid && o.length > 1) {
+      const t = o[0]; o[0] = o[o.length - 1]; o[o.length - 1] = t;
+    }
+    this.order = o; this.pos = 0;
+  },
+  advance() {
+    if (this.pos + 1 >= this.order.length) {
+      this.shuffle(this.order[this.order.length - 1]);
+      return this.order[0];
+    }
+    this.pos++;
+    return this.order[this.pos];
+  },
   start() {
     if (this.timer || !AudioSys.ctx) return;
     this.bus = AudioSys.ctx.createGain();
     this.bus.gain.value = this.VOL;
     this.bus.connect(AudioSys.master);
-    this.play(0, false, 0);
+    this.shuffle(null);
+    this.play(this.order[0], false, 0);
     this.timer = setInterval(() => {
       if (!this.on || this.fading || !this.cur) return;
       const played = this.cur.off + (AudioSys.ctx.currentTime - this.cur.t0);
       if (played > this.cur.dur - this.FADE) {
         this.fading = true;
-        const next = (this.cur.idx + 1) % this.tracks.length;
+        const next = this.advance();
         this.fadeOut();
         this.play(next, true, 0);
         setTimeout(() => { this.fading = false; }, this.FADE * 1000 + 250);
@@ -900,9 +922,10 @@ const MusicSys = {
       src.start(t, offset || 0);
       this.cur = { src, g, idx: i, t0: t, off: offset || 0, dur: buf.duration };
       this.idx = i;
-      this.load((i + 1) % this.tracks.length);   // следващата се тегли отрано
+      const nx = this.order[(this.pos + 1) % this.order.length];
+      this.load(nx);                             // следващата по реда се тегли отрано
       for (const k in this.bufs)                 // пазим в паметта само текущата и следващата
-        if (+k !== i && +k !== (i + 1) % this.tracks.length) delete this.bufs[k];
+        if (+k !== i && +k !== nx) delete this.bufs[k];
     });
   },
   fadeOut() {
