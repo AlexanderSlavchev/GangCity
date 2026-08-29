@@ -814,6 +814,9 @@ const CAR_KINDS = {
   bus:    { name: 'Автобус',   l: 78, w: 25, maxSpeed: 190, accel: 120, hp: 220, mass: 2.6 },
   truck:  { name: 'Камион',    l: 62, w: 25, maxSpeed: 210, accel: 140, hp: 180, mass: 2.2 },
   police: { name: 'Патрулка',  l: 44, w: 22, maxSpeed: 400, accel: 320, hp: 120, mass: 1.1 },
+  tank:   { name: 'Танк',       l: 56, w: 30, maxSpeed: 150, accel: 100, hp: 900, mass: 6 },
+  cannon: { name: 'Оръдие',     l: 34, w: 22, maxSpeed: 0,   accel: 0,   hp: 420, mass: 5 },
+  heli:   { name: 'Хеликоптер', l: 52, w: 26, maxSpeed: 330, accel: 210, hp: 240, mass: 1.4 },
 };
 const CAR_COLORS = ['#c0392b', '#2e6bb5', '#3f9a4d', '#c9b530', '#9b59b6', '#2aa5a0', '#e07b28', '#dadfe4', '#37474f', '#a56a5a', '#5d4a7e', '#7a2c2c'];
 
@@ -823,7 +826,7 @@ function makeCar(x, y, angle, kind) {
     x, y, angle, speed: 0,
     kind, name: k.name, l: k.l, w: k.w, mass: k.mass,
     r: Math.max(14, k.l * 0.31),
-    color: kind === 'police' ? '#20375c' : (kind === 'taxi' ? '#e8b800' : (kind === 'bus' ? '#b05c2a' : CAR_COLORS[Math.floor(R() * CAR_COLORS.length)])),
+    color: kind === 'tank' || kind === 'cannon' ? '#4d5a3c' : kind === 'heli' ? '#37414a' : kind === 'police' ? '#20375c' : (kind === 'taxi' ? '#e8b800' : (kind === 'bus' ? '#b05c2a' : CAR_COLORS[Math.floor(R() * CAR_COLORS.length)])),
     maxSpeed: k.maxSpeed * (0.92 + R() * 0.16), accel: k.accel,
     hp: k.hp, maxHp: k.hp, dead: false, burnT: 0, burn: 0,
     dir: 0, aiPause: 0, siren: 0, marked: false, parked: false, turned: false,
@@ -1338,7 +1341,8 @@ function damageCar(c, dmg, byPlayer, cause) {
     c.dead = true; c.burnT = 0;
     explode(c.x, c.y, byPlayer);
     if (byPlayer) { addHeat(c.kind === 'police' ? 70 : 22); addScore(c.kind === 'police' ? 1500 : 500, c.x, c.y); }
-    if (player.car === c) { player.car = null; damagePlayer(45); }
+    c.flying = false;
+    if (player.car === c) { player.car = null; damagePlayer(c.kind === 'heli' ? 999 : 45); } // взривен хеликоптер = загубен живот
   }
 }
 function explode(x, y, byPlayer) {
@@ -1346,9 +1350,9 @@ function explode(x, y, byPlayer) {
   AudioSys.boom();
   panicNear(x, y, 420);
   for (const p of peds) if (!p.dead && dist2(p.x, p.y, x, y) < 75 * 75) damagePed(p, 100, byPlayer, 'explosion');
-  for (const c of cars) if (!c.dead && dist2(c.x, c.y, x, y) < 85 * 85) damageCar(c, 65, byPlayer, 'explosion');
+  for (const c of cars) if (!c.dead && !c.flying && dist2(c.x, c.y, x, y) < 85 * 85) damageCar(c, 65, byPlayer, 'explosion'); // височината пази летящия хеликоптер
   if (!player.car && !player.dead && dist2(player.x, player.y, x, y) < 85 * 85) damagePlayer(50);
-  else if (player.car && dist2(player.car.x, player.car.y, x, y) < 85 * 85 && !player.car.dead) damageCar(player.car, 35, false, 'explosion');
+  else if (player.car && !player.car.flying && dist2(player.car.x, player.car.y, x, y) < 85 * 85 && !player.car.dead) damageCar(player.car, 35, false, 'explosion');
 }
 function damagePlayer(dmg) {
   if (player.dead || player.busted) return;
@@ -1447,8 +1451,21 @@ function randomSideSpotPx(minDistFromPlayer) {
   }
   return null;
 }
+function spawnGear(kind) {
+  for (let i = 0; i < 80; i++) {
+    const sp = randomRoadSpot();
+    if (!sp) continue;
+    const d = dist2(sp.x, sp.y, player.x, player.y);
+    if (d < 260 * 260 || d > 1500 * 1500) continue;
+    const c = makeCar(sp.x, sp.y, [0, Math.PI / 2, Math.PI, -Math.PI / 2][sp.dir] || 0, kind);
+    c.parked = true; c.gear = true; c.marked = true; c.turret = c.angle;
+    cars.push(c);
+    return c;
+  }
+  return null;
+}
 function startMission() {
-  const roll = missionsDone % 4;
+  const roll = missionsDone % 6;
   if (roll === 0) {
     let car = null, bd = 1e18;
     for (const c of cars) {
@@ -1487,11 +1504,27 @@ function startMission() {
     mission.reward = 3500;
     mission.timer = 20 + mission.checkpoints.length * 13;
     mission.text = 'Докажи, че си бърз — мини през всички чекпойнти!';
-  } else {
+  } else if (roll === 3) {
     mission.active = true; mission.type = 'wreck';
     mission.wrecks = 0; mission.wreckGoal = 3;
     mission.reward = 3000; mission.timer = 100;
     mission.text = 'Конкуренцията ни дразни. Унищожи ' + mission.wreckGoal + ' коли!';
+  } else if (roll === 4) {
+    const gear = [spawnGear('tank'), spawnGear('tank'), spawnGear('cannon'), spawnGear('cannon')].filter(Boolean);
+    if (!gear.length) { mission.cooldown = 3; return; }
+    mission.gear = gear;
+    mission.active = true; mission.type = 'army';
+    mission.wrecks = 0; mission.wreckGoal = 6;
+    mission.reward = 6000; mission.timer = 110;
+    mission.text = 'Армията "забрави" техника из града. Намери танк или оръдие и разбий ' + mission.wreckGoal + ' коли, преди да си я приберат!';
+  } else {
+    const h = spawnGear('heli');
+    if (!h) { mission.cooldown = 3; return; }
+    mission.gear = [h];
+    mission.active = true; mission.type = 'raid';
+    mission.wrecks = 0; mission.wreckGoal = 8;
+    mission.reward = 8000; mission.timer = 95;
+    mission.text = 'Отгоре градът е стрелбище. Вземи хеликоптера и бомбардирай ' + mission.wreckGoal + ' коли! Пази се — ще стрелят по теб.';
   }
   showMsg('☎ ' + mission.text, 5);
   AudioSys.pickup();
@@ -1506,11 +1539,49 @@ function endMission(win) {
     if (missionsDone % 2 === 0 && mult < 8) { mult++; extra = ' · Множител x' + mult; }
     showMsg('РАБОТАТА Е СВЪРШЕНА! +' + fmtMoney(mission.reward * mult) + extra, 4);
     AudioSys.pickup();
-  } else showMsg('Провали работата. Шефът не е доволен.', 3);
+  } else {
+    // Шефът винаги си взима нещо при провал: пари, кръв или оръжие
+    let msg = 'Провали работата. Шефът не е доволен';
+    const pick = Math.floor(R() * 3);
+    let done = false;
+    if (pick === 0 && score >= 400) {
+      const cut = Math.min(score, 400 + Math.floor(score * 0.1));
+      score -= cut; msg += ' — хората му ти взеха ' + fmtMoney(cut) + '.'; done = true;
+    } else if (pick === 1 && player.hp > 45) {
+      player.hp -= 35; FX.blood(player.x, player.y); AudioSys.hit();
+      msg += ' — момчетата му те понатупаха.'; done = true;
+    }
+    if (!done) {
+      let took = -1;
+      for (let w = WEAPONS.length - 1; w >= 1; w--) if (player.ammo[w] > 0) { took = w; break; }
+      if (took > 0) {
+        player.ammo[took] = 0;
+        if (player.weapon === took) cycleWeapon();
+        msg += ' — конфискува ти ' + WEAPONS[took].name.toLowerCase() + '.';
+      } else if (score > 0) {
+        const cut = Math.min(score, 400); score -= cut;
+        msg += ' — хората му ти взеха ' + fmtMoney(cut) + '.';
+      } else if (player.hp > 45) {
+        player.hp -= 35; FX.blood(player.x, player.y); AudioSys.hit();
+        msg += ' — момчетата му те понатупаха.';
+      } else msg += '. Този път ти се размина.';
+    }
+    showMsg(msg, 4);
+  }
+  if (mission.type === 'army' || mission.type === 'raid') mission.gearRemove = true;
   mission.active = false; mission.target = null; mission.checkpoints = [];
   mission.cooldown = 8;
 }
 function updateMission(dt) {
+  if (mission.gearRemove) {
+    mission.gearRemove = false;
+    for (let i = cars.length - 1; i >= 0; i--) if (cars[i].gear) {
+      if (player.car === cars[i]) exitCar();
+      cars.splice(i, 1);
+    }
+    mission.gear = null;
+    showMsg('Армията си прибра техниката.', 2.5);
+  }
   if (!mission.active) return;
   mission.timer -= dt;
   if (mission.timer <= 0) { endMission(false); return; }
@@ -1531,6 +1602,8 @@ function updateMission(dt) {
       addScore(200, player.x, player.y);
       if (!mission.checkpoints.length) endMission(true);
     }
+  } else if (mission.type === 'army' || mission.type === 'raid') {
+    if (mission.gear && mission.gear.every(g => g.dead)) { endMission(false); return; }
   }
   // 'wreck' се отчита в damageCar чрез брояч по-долу
 }
@@ -1539,7 +1612,7 @@ const _origDamageCar = damageCar;
 damageCar = function (c, dmg, byPlayer, cause) {
   const wasDead = c.dead;
   _origDamageCar(c, dmg, byPlayer, cause);
-  if (!wasDead && c.dead && byPlayer && mission.active && mission.type === 'wreck') {
+  if (!wasDead && c.dead && byPlayer && mission.active && !c.gear && (mission.type === 'wreck' || mission.type === 'army' || mission.type === 'raid')) {
     mission.wrecks++;
     showMsg('Унищожени: ' + mission.wrecks + '/' + mission.wreckGoal, 2);
     if (mission.wrecks >= mission.wreckGoal) endMission(true);
@@ -1706,6 +1779,7 @@ function exitCar() {
   const c = player.car;
   if (!c) return;
   c.speed *= 0.2;
+  if (c.kind === 'heli') { c.flying = false; c.speed = 0; }
   const ex = c.x + Math.cos(c.angle + Math.PI / 2) * (c.w / 2 + 14);
   const ey = c.y + Math.sin(c.angle + Math.PI / 2) * (c.w / 2 + 14);
   const pos = collideCircle(ex, ey, 8);
@@ -1755,9 +1829,10 @@ function updatePlayer(dt, inp) {
       if (lives < 0) { gameOver = true; return; }
       player.dead = false; player.hp = 100;
       player.heat = 0; recalcWanted();
+      player.ammo = [-1, 0, 0, 0, 0]; player.weapon = 0;
       mult = Math.max(1, mult - 1);
       player.x = hospitalDoor.x; player.y = hospitalDoor.y;
-      showMsg('Болницата те закърпи. Остават ' + (lives + 1) + ' живота.', 3);
+      showMsg('Болницата те закърпи, но оръжията ти изчезнаха. Остават ' + (lives + 1) + ' живота.', 3);
     }
     return;
   }
@@ -1787,7 +1862,8 @@ function updatePlayer(dt, inp) {
     else if (!tryBoardTrain()) tryEnterCar();
   }
 
-  if (player.car) updatePlayerCar(dt, inp, player.car);
+  if (player.car && player.car.kind === 'heli') updatePlayerHeli(dt, inp, player.car);
+  else if (player.car) updatePlayerCar(dt, inp, player.car);
   else updatePlayerFoot(dt, inp);
 
   // Пикапи
@@ -1808,8 +1884,33 @@ function updatePlayer(dt, inp) {
     }
   }
 
-  // Стрелба (пеша)
   player.fireT -= dt;
+  // Стрелба от военна техника
+  if (player.car && !player.car.dead && inp.fire && player.fireT <= 0) {
+    const c = player.car;
+    if (c.kind === 'tank' || c.kind === 'cannon') {
+      player.fireT = 1.15;
+      const aim = (inp.mx || inp.my) ? Math.atan2(inp.my, inp.mx) : (c.turret !== undefined ? c.turret : c.angle);
+      c.turret = aim;
+      const mx2 = c.x + Math.cos(aim) * (c.l / 2 + 16), my2 = c.y + Math.sin(aim) * (c.l / 2 + 16);
+      projectiles.push({ type: 'rocket', x: mx2, y: my2, vx: Math.cos(aim) * 560, vy: Math.sin(aim) * 560, life: 680 / 560, dmg: 45, police: false });
+      FX.sparks(mx2, my2);
+      AudioSys.rocket();
+      addHeat(0.8);
+      panicNear(c.x, c.y, 320);
+    } else if (c.kind === 'heli') {
+      player.fireT = 0.5;
+      projectiles.push({
+        type: 'bomb',
+        x: c.x + Math.cos(c.angle) * 24, y: c.y + Math.sin(c.angle) * 24,
+        vx: Math.cos(c.angle) * c.speed * 0.6, vy: Math.sin(c.angle) * c.speed * 0.6,
+        life: 0.55, dmg: 0, police: false
+      });
+      AudioSys.blip(200, 0.08, 0.12, 'square');
+      addHeat(0.8);
+    }
+  }
+  // Стрелба (пеша)
   if (!player.car && inp.fire && player.fireT <= 0) {
     const w = WEAPONS[player.weapon];
     if (player.ammo[player.weapon] !== 0) {
@@ -1848,6 +1949,22 @@ function updatePlayerFoot(dt, inp) {
       AudioSys.step(yellowRoad && yellowRoad[idx]);
     }
   }
+}
+function updatePlayerHeli(dt, inp, c) {
+  c.flying = true;
+  c.rotor = (c.rotor || 0) + dt * 26;
+  if (inp.mx || inp.my) {
+    const want = Math.atan2(inp.my, inp.mx);
+    let da = want - c.angle;
+    while (da > Math.PI) da -= Math.PI * 2;
+    while (da < -Math.PI) da += Math.PI * 2;
+    c.angle += clamp(da, -2.3 * dt, 2.3 * dt);
+    c.speed = Math.min(c.maxSpeed, c.speed + c.accel * dt);
+  } else c.speed -= c.speed * 1.5 * dt;
+  if (inp.brake) c.speed -= c.speed * 3 * dt;
+  c.x = clamp(c.x + Math.cos(c.angle) * c.speed * dt, TILE * 2, (MW - 2) * TILE);
+  c.y = clamp(c.y + Math.sin(c.angle) * c.speed * dt, TILE * 2, (MH - 2) * TILE);
+  player.x = c.x; player.y = c.y; player.angle = c.angle;
 }
 function updatePlayerCar(dt, inp, c) {
   const fwd = -inp.my;
@@ -2101,9 +2218,10 @@ function updateCopPed(p, dt) {
     p.arrestT += dt;
     if (p.arrestT > 0.7) { bustPlayer(); p.arrestT = 0; }
   }
-  // Стрелба при издирване ≥ 2
+  // Стрелба при издирване ≥ 2; по летящ хеликоптер — от първата звезда и от по-далеч
   p.shootT -= dt;
-  if (player.wanted >= 2 && d < 260 && d > 40 && p.shootT <= 0) {
+  const vsHeli = player.car && player.car.kind === 'heli' && player.car.flying;
+  if ((vsHeli ? player.wanted >= 1 && d < 430 : player.wanted >= 2 && d < 260) && d > 40 && p.shootT <= 0) {
     p.shootT = 1.2 - level * 0.08;
     fireWeapon(p, ta + (R() - 0.5) * 0.12, 1, true);
   }
@@ -2115,6 +2233,11 @@ function updateProjectiles(dt) {
     const b = projectiles[i];
     b.life -= dt;
     b.x += b.vx * dt; b.y += b.vy * dt;
+    if (b.type === 'bomb') {          // бомбата пада с фитил и гърми на земята
+      if (R() < 0.4) FX.smoke(b.x, b.y);
+      if (b.life <= 0) { explode(b.x, b.y, !b.police); projectiles.splice(i, 1); }
+      continue;
+    }
     const solid = isSolid(tileAtPx(b.x, b.y));
     let gone = b.life <= 0 || solid;
     if (b.type === 'rocket') FX.smoke(b.x, b.y);
@@ -2759,7 +2882,89 @@ function renderCarSprite(kind, color, burned) {
   return c;
 }
 
+function drawArmor(c) {
+  const s = worldToScreen(c.x, c.y);
+  const margin = 100;
+  if (s.x < -margin || s.y < -margin || s.x > VW + margin || s.y > VH + margin) return;
+  ctx.save();
+  ctx.translate(s.x, s.y);
+  ctx.scale(camZoom, camZoom);
+  ctx.save();
+  ctx.rotate(c.angle);
+  if (c.kind === 'tank') {
+    ctx.fillStyle = 'rgba(0,0,0,0.32)';
+    ctx.fillRect(-c.l / 2 + 3, -c.w / 2 + 4, c.l, c.w);
+    ctx.fillStyle = '#2e3626';
+    ctx.fillRect(-c.l / 2, -c.w / 2, c.l, 8);
+    ctx.fillRect(-c.l / 2, c.w / 2 - 8, c.l, 8);
+    ctx.fillStyle = '#171d12';
+    for (let x = -c.l / 2 + 3; x < c.l / 2; x += 7) { ctx.fillRect(x, -c.w / 2 + 1, 3, 6); ctx.fillRect(x, c.w / 2 - 7, 3, 6); }
+    ctx.fillStyle = c.dead ? '#3a3a34' : '#4d5a3c';
+    ctx.fillRect(-c.l / 2 + 2, -c.w / 2 + 7, c.l - 4, c.w - 14);
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    ctx.fillRect(-c.l / 2 + 2, -c.w / 2 + 7, c.l - 4, 3);
+  } else {
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath(); ctx.arc(3, 4, c.w * 0.62, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#20261a';
+    ctx.fillRect(-4, -c.w / 2 - 3, 10, 6);
+    ctx.fillRect(-4, c.w / 2 - 3, 10, 6);
+    ctx.fillStyle = c.dead ? '#3a3a34' : '#44503a';
+    ctx.beginPath(); ctx.arc(0, 0, c.w * 0.55, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+  const ta = (c.turret !== undefined ? c.turret : c.angle);
+  ctx.rotate(ta);
+  ctx.fillStyle = c.dead ? '#2e2e2a' : (c.kind === 'tank' ? '#3f4a30' : '#37422c');
+  ctx.beginPath(); ctx.arc(0, 0, c.kind === 'tank' ? 9 : 6.5, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#242b1c';
+  ctx.fillRect(0, -2.2, c.kind === 'tank' ? 30 : 26, 4.4);
+  ctx.fillRect(c.kind === 'tank' ? 26 : 22, -3.2, 4, 6.4);
+  ctx.restore();
+}
+function drawHeli(c, flying) {
+  const s = worldToScreen(c.x, c.y);
+  const margin = 140;
+  if (s.x < -margin || s.y < -margin || s.x > VW + margin || s.y > VH + margin) return;
+  const lift = flying ? 1.22 : 1;
+  ctx.save();
+  ctx.translate(s.x + (flying ? 26 : 4) * camZoom, s.y + (flying ? 34 : 5) * camZoom);
+  ctx.rotate(c.angle);
+  ctx.scale(camZoom, camZoom);
+  ctx.fillStyle = flying ? 'rgba(0,0,0,0.22)' : 'rgba(0,0,0,0.32)';
+  ctx.beginPath(); ctx.ellipse(0, 0, 26, 12, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+  ctx.save();
+  ctx.translate(s.x, s.y);
+  ctx.rotate(c.angle);
+  ctx.scale(camZoom * lift, camZoom * lift);
+  ctx.strokeStyle = '#22262b'; ctx.lineWidth = 2.4;
+  ctx.beginPath(); ctx.moveTo(-14, -12); ctx.lineTo(12, -12); ctx.moveTo(-14, 12); ctx.lineTo(12, 12); ctx.stroke();
+  ctx.fillStyle = c.dead ? '#33363a' : '#3b444d';
+  ctx.fillRect(-30, -2.6, 22, 5.2);
+  ctx.save(); ctx.translate(-30, 0); ctx.rotate((c.rotor || 0) * 3);
+  ctx.strokeStyle = '#1a1d20'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(0, -6); ctx.lineTo(0, 6); ctx.stroke(); ctx.restore();
+  ctx.fillStyle = c.dead ? '#3a3d40' : '#37414a';
+  ctx.beginPath(); ctx.ellipse(0, 0, 15, 10, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = c.dead ? '#4a4d50' : '#9fc4d8';
+  ctx.beginPath(); ctx.ellipse(6, 0, 6.5, 6, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#20242a';
+  ctx.fillRect(2, -9.5, 10, 2.4); ctx.fillRect(2, 7.1, 10, 2.4);
+  ctx.save(); ctx.rotate(c.rotor || 0);
+  ctx.strokeStyle = 'rgba(20,22,25,0.85)'; ctx.lineWidth = 2.6;
+  ctx.beginPath(); ctx.moveTo(-26, 0); ctx.lineTo(26, 0); ctx.moveTo(0, -26); ctx.lineTo(0, 26); ctx.stroke();
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(180,190,200,0.18)'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(0, 0, 26, 0, Math.PI * 2); ctx.stroke();
+  ctx.restore();
+}
+function drawFlyingHelis() {
+  for (const c of cars) if (c.kind === 'heli' && c.flying && !c.dead) drawHeli(c, true);
+}
 function drawCar(c) {
+  if (c.kind === 'tank' || c.kind === 'cannon') { drawArmor(c); return; }
+  if (c.kind === 'heli') { if (!c.flying) drawHeli(c, false); return; }
   const s = worldToScreen(c.x, c.y);
   const margin = 100;
   if (s.x < -margin || s.y < -margin || s.x > VW + margin || s.y > VH + margin) return;
@@ -2982,6 +3187,16 @@ function drawProjectiles() {
       ctx.fillRect(4, -2.5, 3, 5);
       ctx.fillStyle = '#ff9a3c';
       ctx.beginPath(); ctx.arc(-7, 0, 3, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    } else if (b.type === 'bomb') {
+      ctx.save();
+      ctx.translate(s.x, s.y);
+      ctx.rotate(Math.atan2(b.vy, b.vx));
+      ctx.scale(camZoom, camZoom);
+      ctx.fillStyle = '#23272b';
+      ctx.beginPath(); ctx.ellipse(0, 0, 6, 3, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#3c4248';
+      ctx.fillRect(-7, -2.6, 3, 5.2);
       ctx.restore();
     }
     // flame се вижда чрез частиците
@@ -3597,6 +3812,15 @@ function drawMissionMarkers() {
     if (player.car === mission.target) { tx = mission.drop.x; ty = mission.drop.y; }
     else { tx = mission.target.x; ty = mission.target.y; }
   } else if (mission.type === 'hit') { tx = mission.target.x; ty = mission.target.y; color = '#e55'; }
+  else if ((mission.type === 'army' || mission.type === 'raid') && mission.gear && !(player.car && player.car.gear)) {
+    let best = null, bd = 1e18;
+    for (const g of mission.gear) {
+      if (g.dead) continue;
+      const dv = dist2(g.x, g.y, player.x, player.y);
+      if (dv < bd) { bd = dv; best = g; }
+    }
+    if (best) { tx = best.x; ty = best.y; color = '#8ac'; }
+  }
   else if (mission.type === 'race' && mission.checkpoints.length) {
     const cp = mission.checkpoints[0];
     tx = cp.x; ty = cp.y; color = '#fc5';
@@ -4085,6 +4309,8 @@ function frame(now) {
   drawBuildings();          // сградите закриват всичко зад тях (както в класиката)
   drawLandmarks();          // куполи, НДК, стадионът, фонтанът
   drawMetro();              // метрото е над всичко — то е надземна линия
+
+  drawFlyingHelis();        // летящият хеликоптер е над сградите
 
   // Цветният подпис на града — лек оттенък върху целия свят (преди нощта и HUD-а)
   if (theme.cast) {
