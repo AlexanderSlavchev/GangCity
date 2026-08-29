@@ -731,25 +731,12 @@ const AudioSys = {
   step(hard) {
     this.burst({ dur: 0.045, vol: 0.05, freq: hard ? 1500 : 950, q: 1.6, ftype: 'bandpass', rate: 1.6 });
   },
-  horn(x) {
-    const f = [349, 392, 440, 494][Math.floor(R() * 4)];
-    const p = this.pan(x);
-    const d = 0.3 + R() * 0.45;
-    this.tone({ f0: f, f1: f, dur: d, vol: 0.05, type: 'square', pan: p });
-    if (R() < 0.5) this.tone({ f0: f * 1.26, f1: f * 1.26, dur: d, vol: 0.035, type: 'square', pan: p });
-  },
+  horn(x) {},  // тонални клаксони — изключени: биеха се със саундтрака
   scream(x) {
     this.tone({ f0: 750 + R() * 350, f1: 380, dur: 0.32, vol: 0.045, type: 'sawtooth', pan: this.pan(x) });
   },
-  bell() {
-    this.tone({ f0: 392, f1: 390, dur: 2.6, vol: 0.09, type: 'sine', echo: 0.5 });
-    this.tone({ f0: 988, f1: 985, dur: 1.5, vol: 0.035, type: 'sine' });
-  },
-  birds() {
-    const f = 2600 + R() * 900;
-    this.tone({ f0: f, f1: f * 0.82, dur: 0.09, vol: 0.028, type: 'sine', pan: (R() - 0.5) });
-    setTimeout(() => this.tone({ f0: f * 1.1, f1: f * 0.9, dur: 0.11, vol: 0.024, type: 'sine' }), 120 + R() * 120);
-  },
+  bell() {},   // камбани — изключени
+  birds() {},  // птички — изключени
   thunder() {
     this.tone({ f0: 68, f1: 24, dur: 2.4, vol: 0.4, type: 'sine' });
     this.burst({ dur: 2.1, vol: 0.32, freq: 170, q: 0.4, rate: 0.4, echo: 0.6 });
@@ -1134,10 +1121,58 @@ function spawnParticles(x, y, n, opts) {
     });
   }
 }
+
+// Кеширани светещи петна за огъня (бяло ядро -> жълто -> оранжево -> прозрачно)
+const flameSprites = (() => {
+  const defs = [
+    ['rgba(255,255,235,1)', 'rgba(255,214,110,0.95)', 'rgba(255,122,26,0.55)'],  // горещо
+    ['rgba(255,224,150,0.95)', 'rgba(255,140,40,0.85)', 'rgba(230,60,10,0.35)'], // средно
+    ['rgba(255,150,60,0.8)',  'rgba(215,70,18,0.6)',  'rgba(120,25,8,0.15)'],    // догарящо
+    ['rgba(120,116,112,0.5)', 'rgba(84,82,80,0.35)',  'rgba(60,58,56,0)']        // дим
+  ];
+  return defs.map(st => {
+    const c = document.createElement('canvas'); c.width = c.height = 64;
+    const g = c.getContext('2d');
+    const gr = g.createRadialGradient(32, 32, 2, 32, 32, 32);
+    gr.addColorStop(0, st[0]); gr.addColorStop(0.42, st[1]);
+    gr.addColorStop(0.8, st[2]); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+    return c;
+  });
+})();
+
+function spawnFlame(x, y, vx, vy, size, dur) {
+  if (particles.length > 260) particles.shift();
+  particles.push({
+    kind: 'flame', x, y, vx, vy, t: 0,
+    dur: dur * (0.75 + R() * 0.5),
+    size: size * (0.75 + R() * 0.5),
+    grow: 0, drag: 2.6,
+    wob: R() * Math.PI * 2, wobF: 7 + R() * 6
+  });
+}
 const FX = {
   sparks: (x, y) => spawnParticles(x, y, 8, { speed: 160, dur: 0.4, size: 2.4, colors: ['#ffe27a', '#ffb347', '#fff'], drag: 3 }),
   smoke: (x, y) => spawnParticles(x, y, 1, { speed: 12, vy: -18, dur: 1.4, size: 6, colors: ['rgba(70,70,74,0.5)', 'rgba(96,96,100,0.45)'], grow: 9 }),
-  fire: (x, y) => spawnParticles(x, y, 2, { speed: 26, vy: -30, dur: 0.5, size: 5, colors: ['#ff9a3c', '#ff5722', '#ffd23c'], grow: -4 }),
+  fire: (x, y) => {
+    spawnFlame(x + (R() - 0.5) * 7, y + (R() - 0.5) * 7,
+      (R() - 0.5) * 16, -26 - R() * 26, 6.5, 0.55);
+    if (R() < 0.30) FX.smoke(x + (R() - 0.5) * 6, y - 6);
+    if (R() < 0.18) spawnParticles(x, y, 1,
+      { speed: 55, vy: -70, dur: 0.55, size: 1.4, colors: ['#ffd23c', '#ffb347'], drag: 1.5 }); // въглен
+  },
+  // Струя на огнехвъргачката: частиците наследяват посоката, разширяват се и догарят в дим
+  flameJet: (b) => {
+    const frac = 1 - b.life / (b.life0 || 0.58);          // 0 при дулото -> 1 в края
+    const spread = 24 + frac * 58;
+    for (let i = 0; i < 2; i++)
+      spawnFlame(b.x + (R() - 0.5) * 4, b.y + (R() - 0.5) * 4,
+        b.vx * 0.28 + (R() - 0.5) * spread,
+        b.vy * 0.28 + (R() - 0.5) * spread - 12 - frac * 26,
+        3.2 + frac * 8.5,
+        0.26 + frac * 0.30);
+    if (frac > 0.55 && R() < 0.22) FX.smoke(b.x, b.y);
+  },
   blood: (x, y) => spawnParticles(x, y, 7, { speed: 90, dur: 0.5, size: 3, colors: ['#8e1a1a', '#b32424'], drag: 4 }),
   boom: (x, y) => {
     spawnParticles(x, y, 22, { speed: 240, dur: 0.7, size: 4, colors: ['#ff9a3c', '#ff5722', '#ffd23c', '#333'], drag: 2.5 });
@@ -1204,8 +1239,10 @@ function fireWeapon(shooter, angle, weaponIdx, fromPolice) {
       type: 'flame',
       x: shooter.x + Math.cos(a) * 14, y: shooter.y + Math.sin(a) * 14,
       vx: Math.cos(a) * 260, vy: Math.sin(a) * 260,
-      life: w.range / 260, dmg: w.dmg, police: !!fromPolice
+      life: w.range / 260, life0: w.range / 260, dmg: w.dmg, police: !!fromPolice
     });
+    spawnFlame(shooter.x + Math.cos(a) * 16, shooter.y + Math.sin(a) * 16,
+      Math.cos(a) * 90, Math.sin(a) * 90 - 8, 3.4, 0.14);  // изблик при дулото
     AudioSys.flame();
   } else if (w.rocket) {
     projectiles.push({
@@ -2045,7 +2082,7 @@ function updateProjectiles(dt) {
     const solid = isSolid(tileAtPx(b.x, b.y));
     let gone = b.life <= 0 || solid;
     if (b.type === 'rocket') FX.smoke(b.x, b.y);
-    if (b.type === 'flame') FX.fire(b.x, b.y);
+    if (b.type === 'flame') FX.flameJet(b);
     if (!gone) {
       for (const p of peds) {
         if (p.dead) continue;
@@ -2081,6 +2118,12 @@ function updateParticles(dt) {
     p.x += p.vx * dt; p.y += p.vy * dt;
     if (p.drag) { p.vx -= p.vx * p.drag * dt; p.vy -= p.vy * p.drag * dt; }
     if (p.grow) p.size += p.grow * dt;
+    if (p.kind === 'flame') {
+      const k = p.t / p.dur;
+      p.vy -= 46 * k * dt;                                   // топлината тегли нагоре
+      p.vx += Math.sin(p.wob + p.t * p.wobF) * 34 * dt;      // турбуленция
+      p.size += (2.2 + k * 7) * dt;                          // пламъкът се разтваря
+    }
   }
   for (let i = skids.length - 1; i >= 0; i--) {
     skids[i].t += dt;
@@ -2909,13 +2952,38 @@ function drawProjectiles() {
   }
 }
 function drawParticles() {
+  let hasFlame = false;
   for (const p of particles) {
+    if (p.kind === 'flame') { hasFlame = true; continue; }
     const s = worldToScreen(p.x, p.y);
     const k = p.t / p.dur;
     ctx.globalAlpha = 1 - k;
     ctx.fillStyle = p.color;
     ctx.beginPath(); ctx.arc(s.x, s.y, Math.max(0.5, p.size) * camZoom, 0, Math.PI * 2); ctx.fill();
   }
+  ctx.globalAlpha = 1;
+  if (!hasFlame) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';   // пламъците се наслагват и греят
+  for (const p of particles) {
+    if (p.kind !== 'flame') continue;
+    const s = worldToScreen(p.x, p.y);
+    const k = p.t / p.dur;
+    // горещо ядро -> оранжево -> догарящо; последната четвърт е дим без греене
+    if (k > 0.75) {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = (1 - k) * 1.6;
+      const r = p.size * 1.25 * camZoom;
+      ctx.drawImage(flameSprites[3], s.x - r, s.y - r, r * 2, r * 2);
+      ctx.globalCompositeOperation = 'lighter';
+    } else {
+      const idx = k < 0.28 ? 0 : k < 0.55 ? 1 : 2;
+      ctx.globalAlpha = 0.9 * (1 - k * 0.85);
+      const r = p.size * camZoom;
+      ctx.drawImage(flameSprites[idx], s.x - r, s.y - r, r * 2, r * 2);
+    }
+  }
+  ctx.restore();
   ctx.globalAlpha = 1;
 }
 
