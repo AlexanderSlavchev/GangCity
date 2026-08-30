@@ -199,6 +199,16 @@ let hospitalDoor = null, policeDoor = null, resprayDoor = null;
 let crusherDoor = null, churchDoor = null;
 let crusherCd = 0, churchCd = 0;
 const taxiJob = { fare: null, dest: null, t: 0, pay: 0, offCd: 0 };
+const GANGS = [
+  { name: 'Западните', color: '#3a6fb5' },
+  { name: 'Източните', color: '#b53a3a' },
+];
+const respect = [0, 0];   // -100..100 за всяка банда
+let gangZoneLast = -2;
+function gangAt(x) {
+  const f = x / (MW * TILE);
+  return f < 0.42 ? 0 : f > 0.58 ? 1 : -1;   // средата е ничия земя
+}
 const phones = [];
 const frenzySpots = [];
 const miniCanvas = document.createElement('canvas');
@@ -1502,6 +1512,7 @@ function updatePhones(dt) {
     if (d < 500 * 500 && R() < dt * 1.2) AudioSys.ring();
     if (!player.car && d < 26 * 26) {
       ph.ringing = false;
+      mission.gangHint = gangAt(ph.x);
       startMission();
     }
   }
@@ -1590,6 +1601,12 @@ function startMission() {
     mission.reward = 8000; mission.timer = 95;
     mission.text = 'Отгоре градът е стрелбище. Вземи хеликоптера и бомбардирай ' + mission.wreckGoal + ' коли! Пази се — ще стрелят по теб.';
   }
+  mission.gang = (mission.gangHint !== undefined && mission.gangHint >= 0) ? mission.gangHint : -1;
+  mission.gangHint = undefined;
+  if (mission.gang >= 0) {
+    mission.text = '[' + GANGS[mission.gang].name + '] ' + mission.text;
+    if (respect[mission.gang] >= 40) mission.reward = Math.floor(mission.reward * 1.5);   // доверен човек = по-тлъсти пари
+  }
   showMsg('☎ ' + mission.text, 5);
   AudioSys.pickup();
 }
@@ -1633,6 +1650,17 @@ function endMission(win) {
     showMsg(msg, 4);
   }
   if (mission.type === 'army' || mission.type === 'raid') mission.gearRemove = true;
+  if (mission.gang >= 0) {
+    const g = mission.gang, r = 1 - g;
+    if (win) {
+      respect[g] = Math.min(100, respect[g] + 12);
+      respect[r] = Math.max(-100, respect[r] - 8);
+      showMsg(GANGS[g].name + ' те уважават повече (+12). ' + GANGS[r].name + ' те намразиха (-8).', 3.5);
+    } else {
+      respect[g] = Math.max(-100, respect[g] - 10);
+    }
+  }
+  mission.gang = -1;
   mission.active = false; mission.target = null; mission.checkpoints = [];
   mission.cooldown = 8;
 }
@@ -2344,6 +2372,10 @@ function updatePoliceCar(c, dt) {
 // ---------------- Ъпдейт: пешеходци и ченгета ----------------
 function updatePed(p, dt) {
   if (p.dead) { p.deadT += dt; return; }
+  if (p.gang === undefined) {
+    p.gang = (!p.cop && R() < 0.28) ? gangAt(p.x) : -1;
+    if (p.gang >= 0) p.shirt = GANGS[p.gang].color;
+  }
   if (p.burn > 0) {
     p.burn -= dt;
     p.panic = 5;
@@ -2353,6 +2385,20 @@ function updatePed(p, dt) {
   }
   if (p.zap > 0) { p.zap -= dt; p.moving = 0; return; }
   if (p.cop && player.wanted > 0 && player.invis <= 0 && !player.dead && !player.busted) { updateCopPed(p, dt); return; }
+  if (p.gang >= 0 && respect[p.gang] <= -30 && gangAt(player.x) === p.gang &&
+      player.invis <= 0 && !player.dead && !player.busted) {
+    const dv = dist2(p.x, p.y, player.x, player.y);
+    if (dv < 320 * 320) {
+      const ta = Math.atan2(player.y - p.y, player.x - p.x);
+      p.angle = ta; p.moving = 0;
+      p.shootT -= dt;
+      if (p.shootT <= 0 && dv > 40 * 40) {
+        p.shootT = 1.4;
+        fireWeapon(p, ta + (R() - 0.5) * 0.15, 1, true);
+      }
+      return;
+    }
+  }
   const spd = p.panic > 0 ? 150 : 45;
   if (p.panic > 0) p.panic -= dt;
   if (R() < dt * (p.panic > 0 ? 1.5 : 0.4)) p.angle += (R() - 0.5) * (p.panic > 0 ? 2.5 : 1.6);
@@ -4478,6 +4524,17 @@ function frame(now) {
     updateCrusher(dt);
     updateChurch(dt);
     updateTaxi(dt);
+    {
+      const z = gangAt(player.x);
+      if (z !== gangZoneLast) {
+        gangZoneLast = z;
+        if (z >= 0) {
+          const r = Math.round(respect[z]);
+          showMsg(GANGS[z].name + ' държат този район. Уважение: ' + (r > 0 ? '+' : '') + r +
+            (r <= -30 ? ' — ВНИМАВАЙ!' : ''), 2.5);
+        }
+      }
+    }
     updateMetro(dt);
     updateWeather(dt);
     recycle(dt);
