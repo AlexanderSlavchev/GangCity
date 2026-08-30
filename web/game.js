@@ -804,6 +804,8 @@ const WEAPONS = [
   { name: 'Картечница',    rate: 0.08, dmg: 14, range: 400, spread: 0.08, auto: true },
   { name: 'Огнехвъргачка', rate: 0.04, dmg: 7,  range: 150, spread: 0.25, auto: true, flame: true },
   { name: 'Ракетомет',     rate: 1.0,  dmg: 30, range: 700, spread: 0.01, auto: false, rocket: true },
+  { name: 'Молотов',       rate: 1.1,  dmg: 22, range: 300, spread: 0.02, auto: false, molotov: true },
+  { name: 'Електрошок',    rate: 0.4,  dmg: 22, range: 250, spread: 0,    auto: true,  zap: true },
 ];
 
 // ---------------- Коли ----------------
@@ -854,7 +856,7 @@ const particles = [], skids = [], floaters = [];
 const player = {
   x: 0, y: 0, angle: 0,
   hp: 100, armor: 0,
-  car: null, onTrain: null, weapon: 1, ammo: [-1, 30, 0, 0, 0],
+  car: null, onTrain: null, weapon: 1, ammo: [-1, 30, 0, 0, 0, 0, 0],
   fireT: 0, dead: false, deadT: 0, busted: false, bustedT: 0,
   wanted: 0, heat: 0, lastCrimeT: -999
 };
@@ -1037,7 +1039,7 @@ function spawnWorld() {
       peds.push(makePed(tx * TILE + TILE / 2, ty * TILE + TILE / 2));
     }
   }
-  const PICKS = ['health', 'money', 'pistol', 'mg', 'flame', 'rocket', 'armor'];
+  const PICKS = ['health', 'money', 'pistol', 'mg', 'flame', 'rocket', 'armor', 'molotov', 'zap', 'dd', 'invis'];
   let pl = 0;
   for (let i = 0; i < 700 && pl < 26; i++) {
     const tx = 3 + Math.floor(R() * (MW - 6)), ty = 3 + Math.floor(R() * (MH - 6));
@@ -1223,7 +1225,7 @@ function addHeat(amount) {
   recalcWanted();
 }
 function recalcWanted() {
-  player.wanted = player.heat >= 260 ? 4 : player.heat >= 140 ? 3 : player.heat >= 60 ? 2 : player.heat >= 15 ? 1 : 0;
+  player.wanted = player.heat >= 360 ? 6 : player.heat >= 300 ? 5 : player.heat >= 260 ? 4 : player.heat >= 140 ? 3 : player.heat >= 60 ? 2 : player.heat >= 15 ? 1 : 0;
 }
 function updateWanted(dt) {
   if (gameT - player.lastCrimeT > 14) {
@@ -1245,19 +1247,74 @@ function updateWanted(dt) {
   // Пеши полицаи при издирване ≥ 2
   if (player.wanted >= 2 && copPeds < player.wanted * 2 && R() < dt * 0.4) {
     const s = nearestSideTile(player.x + (R() - 0.5) * 900, player.y + (R() - 0.5) * 900, 500);
-    if (s && dist2(s.x, s.y, player.x, player.y) > 260 * 260) peds.push(makePed(s.x, s.y, true));
+    if (s && dist2(s.x, s.y, player.x, player.y) > 260 * 260) {
+      const cp = makePed(s.x, s.y, true);
+      if (player.wanted >= 5) { cp.swat = true; cp.hp = 90; cp.shirt = '#1d242b'; } // SWAT
+      peds.push(cp);
+    }
+  }
+  // Армията при 6 звезди — танкове по петите ти
+  if (player.wanted >= 6) {
+    let armyTanks = 0;
+    for (const c of cars) if (c.army && !c.dead) armyTanks++;
+    if (armyTanks < 2 && R() < dt * 0.3) {
+      const s2 = randomRoadSpot();
+      if (s2 && dist2(s2.x, s2.y, player.x, player.y) > 600 * 600) {
+        const t2 = makeCar(s2.x, s2.y, DIR_ANG[s2.dir], 'tank');
+        t2.army = true; t2.turret = t2.angle;
+        cars.push(t2);
+        showMsg('АРМИЯТА Е НА УЛИЦАТА!', 2.5);
+      }
+    }
   }
 }
 
 // ---------------- Бой ----------------
 function fireWeapon(shooter, angle, weaponIdx, fromPolice) {
   const w = WEAPONS[weaponIdx];
+  const dmgX = (!fromPolice && player.dd > 0) ? 2 : 1;
+  if (w.molotov) {
+    const am = angle + (R() - 0.5) * w.spread * 2;
+    projectiles.push({
+      type: 'molotov',
+      x: shooter.x + Math.cos(am) * 14, y: shooter.y + Math.sin(am) * 14,
+      vx: Math.cos(am) * 330, vy: Math.sin(am) * 330,
+      life: w.range / 330, dmg: w.dmg * dmgX, police: !!fromPolice
+    });
+    AudioSys.blip(300, 0.1, 0.1);
+    return;
+  }
+  if (w.zap) {
+    let best = null, bd = w.range * w.range;
+    for (const p of peds) {
+      if (p.dead || p === shooter) continue;
+      const dv = dist2(p.x, p.y, shooter.x, shooter.y);
+      if (dv > bd) continue;
+      const aTo = Math.atan2(p.y - shooter.y, p.x - shooter.x);
+      let da = aTo - angle;
+      while (da > Math.PI) da -= Math.PI * 2;
+      while (da < -Math.PI) da += Math.PI * 2;
+      if (Math.abs(da) < 0.5) { bd = dv; best = p; }
+    }
+    AudioSys.blip(1600, 0.06, 0.09, 'square');
+    if (best) {
+      best.zap = 1.2;
+      damagePed(best, w.dmg * dmgX, !fromPolice, 'bullet');
+      const dd2 = Math.sqrt(dist2(best.x, best.y, shooter.x, shooter.y));
+      for (let t = 0.15; t < 1; t += 0.14) {
+        const lx = shooter.x + (best.x - shooter.x) * t + (R() - 0.5) * 10;
+        const ly = shooter.y + (best.y - shooter.y) * t + (R() - 0.5) * 10;
+        spawnParticles(lx, ly, 1, { speed: 14, dur: 0.14, size: 1.7, colors: ['#aaeeff', '#66ccff', '#ffffff'] });
+      }
+    }
+    return;
+  }
   if (w.melee) {
     const hx = shooter.x + Math.cos(angle) * w.range, hy = shooter.y + Math.sin(angle) * w.range;
     for (const p of peds) {
       if (p.dead || p === shooter) continue;
       if (dist2(p.x, p.y, hx, hy) < 26 * 26 || dist2(p.x, p.y, shooter.x, shooter.y) < 30 * 30) {
-        damagePed(p, w.dmg, !fromPolice, 'melee');
+        damagePed(p, (w.dmg * dmgX), !fromPolice, 'melee');
         AudioSys.hit();
         break;
       }
@@ -1270,7 +1327,7 @@ function fireWeapon(shooter, angle, weaponIdx, fromPolice) {
       type: 'flame',
       x: shooter.x + Math.cos(a) * 14, y: shooter.y + Math.sin(a) * 14,
       vx: Math.cos(a) * 260, vy: Math.sin(a) * 260,
-      life: w.range / 260, life0: w.range / 260, dmg: w.dmg, police: !!fromPolice
+      life: w.range / 260, life0: w.range / 260, dmg: (w.dmg * dmgX), police: !!fromPolice
     });
     spawnFlame(shooter.x + Math.cos(a) * 16, shooter.y + Math.sin(a) * 16,
       Math.cos(a) * 90, Math.sin(a) * 90 - 8, 3.4, 0.14);  // изблик при дулото
@@ -1280,7 +1337,7 @@ function fireWeapon(shooter, angle, weaponIdx, fromPolice) {
       type: 'rocket',
       x: shooter.x + Math.cos(a) * 20, y: shooter.y + Math.sin(a) * 20,
       vx: Math.cos(a) * 520, vy: Math.sin(a) * 520,
-      life: w.range / 520, dmg: w.dmg, police: !!fromPolice
+      life: w.range / 520, dmg: (w.dmg * dmgX), police: !!fromPolice
     });
     AudioSys.rocket();
   } else {
@@ -1288,7 +1345,7 @@ function fireWeapon(shooter, angle, weaponIdx, fromPolice) {
       type: 'bullet',
       x: shooter.x + Math.cos(a) * 16, y: shooter.y + Math.sin(a) * 16,
       vx: Math.cos(a) * 950, vy: Math.sin(a) * 950,
-      life: w.range / 950, dmg: w.dmg, police: !!fromPolice
+      life: w.range / 950, dmg: (w.dmg * dmgX), police: !!fromPolice
     });
     weaponIdx === 2 ? AudioSys.mg() : AudioSys.shot();
   }
@@ -1815,7 +1872,7 @@ function updatePlayer(dt, inp) {
       player.busted = false;
       player.hp = 100;
       player.heat = 0; recalcWanted();
-      player.ammo = [-1, 0, 0, 0, 0]; player.weapon = 0;
+      player.ammo = [-1, 0, 0, 0, 0, 0, 0]; player.weapon = 0;
       mult = Math.max(1, Math.ceil(mult / 2));
       player.x = policeDoor.x; player.y = policeDoor.y;
       showMsg('Пуснаха те от участъка. Оръжията ти ги няма.', 3);
@@ -1829,7 +1886,7 @@ function updatePlayer(dt, inp) {
       if (lives < 0) { gameOver = true; return; }
       player.dead = false; player.hp = 100;
       player.heat = 0; recalcWanted();
-      player.ammo = [-1, 0, 0, 0, 0]; player.weapon = 0;
+      player.ammo = [-1, 0, 0, 0, 0, 0, 0]; player.weapon = 0;
       mult = Math.max(1, mult - 1);
       player.x = hospitalDoor.x; player.y = hospitalDoor.y;
       showMsg('Болницата те закърпи, но оръжията ти изчезнаха. Остават ' + (lives + 1) + ' живота.', 3);
@@ -1879,12 +1936,18 @@ function updatePlayer(dt, inp) {
       else if (pk.type === 'mg') { player.ammo[2] += 50; if (player.weapon <= 1) player.weapon = 2; showMsg('+Картечница', 1); }
       else if (pk.type === 'flame') { player.ammo[3] += 40; showMsg('+Огнехвъргачка', 1); }
       else if (pk.type === 'rocket') { player.ammo[4] += 3; showMsg('+Ракетомет', 1); }
+      else if (pk.type === 'molotov') { player.ammo[5] += 5; showMsg('+Молотови', 1); }
+      else if (pk.type === 'zap') { player.ammo[6] += 30; showMsg('+Електрошок', 1); }
+      else if (pk.type === 'dd') { player.dd = 30; showMsg('✖2 ДВОЙНИ ЩЕТИ — 30 сек!', 2.5); }
+      else if (pk.type === 'invis') { player.invis = 20; showMsg('НЕВИДИМ ЗА ПОЛИЦИЯТА — 20 сек', 2.5); }
       else taken = false;
       if (taken) { pickups.splice(i, 1); AudioSys.pickup(); }
     }
   }
 
   player.fireT -= dt;
+  if (player.dd > 0) player.dd -= dt;
+  if (player.invis > 0) { player.invis -= dt; if (player.invis <= 0) showMsg('Полицията отново те вижда.', 1.5); }
   // Стрелба от военна техника
   if (player.car && !player.car.dead && inp.fire && player.fireT <= 0) {
     const c = player.car;
@@ -2042,6 +2105,36 @@ function updatePlayerCar(dt, inp, c) {
   player.x = c.x; player.y = c.y; player.angle = c.angle;
 }
 
+// Армейски танк: гони играча и стреля със снаряди
+function updateArmyTank(c, dt) {
+  const dx = player.x - c.x, dy = player.y - c.y;
+  const want = Math.atan2(dy, dx);
+  let da = want - c.angle;
+  while (da > Math.PI) da -= Math.PI * 2;
+  while (da < -Math.PI) da += Math.PI * 2;
+  c.angle += clamp(da, -0.9 * dt, 0.9 * dt);
+  const d = Math.sqrt(dx * dx + dy * dy);
+  c.speed += (d > 240 ? c.accel : -c.accel) * dt;
+  c.speed = clamp(c.speed, 0, c.maxSpeed);
+  const pos = collideCircle(c.x + Math.cos(c.angle) * c.speed * dt, c.y + Math.sin(c.angle) * c.speed * dt, c.r);
+  if (pos.hit) c.speed *= 0.3;
+  c.x = pos.x; c.y = pos.y;
+  for (const o of cars) {                       // мачка всичко по пътя си
+    if (o === c || o.dead || o.flying || o.army) continue;
+    const rr = c.r + o.r - 8;
+    if (dist2(c.x, c.y, o.x, o.y) < rr * rr && Math.abs(c.speed) > 40) damageCar(o, 90 * dt + 15, false);
+  }
+  c.shellT = (c.shellT === undefined ? 1.5 : c.shellT) - dt;
+  if (c.shellT <= 0 && d < 560 && Math.abs(da) < 0.5 && player.wanted > 0 && player.invis <= 0 && !player.dead && !player.busted) {
+    c.shellT = 2.4;
+    c.turret = want;
+    const mx2 = c.x + Math.cos(want) * (c.l / 2 + 16), my2 = c.y + Math.sin(want) * (c.l / 2 + 16);
+    projectiles.push({ type: 'rocket', x: mx2, y: my2, vx: Math.cos(want) * 520, vy: Math.sin(want) * 520, life: 620 / 520, dmg: 40, police: true });
+    FX.sparks(mx2, my2);
+    AudioSys.rocket();
+  }
+}
+
 // ---------------- Ъпдейт: коли AI ----------------
 function updateCarAI(c, dt) {
   if (c.dead) {
@@ -2057,9 +2150,10 @@ function updateCarAI(c, dt) {
     if (c.dead) return;
   }
   if (c.hp < c.maxHp * 0.35 && R() < dt * 8) FX.smoke(c.x, c.y);
+  if (c.army && c !== player.car) { updateArmyTank(c, dt); return; }
   if (c === player.car || c.parked) return;
 
-  if (c.kind === 'police' && player.wanted > 0 && !player.dead && !player.busted) {
+  if (c.kind === 'police' && player.wanted > 0 && player.invis <= 0 && !player.dead && !player.busted) {
     updatePoliceCar(c, dt);
     return;
   }
@@ -2178,7 +2272,8 @@ function updatePed(p, dt) {
     damagePed(p, 16 * dt, true, 'burning');
     if (p.dead) return;
   }
-  if (p.cop && player.wanted > 0 && !player.dead && !player.busted) { updateCopPed(p, dt); return; }
+  if (p.zap > 0) { p.zap -= dt; p.moving = 0; return; }
+  if (p.cop && player.wanted > 0 && player.invis <= 0 && !player.dead && !player.busted) { updateCopPed(p, dt); return; }
   const spd = p.panic > 0 ? 150 : 45;
   if (p.panic > 0) p.panic -= dt;
   if (R() < dt * (p.panic > 0 ? 1.5 : 0.4)) p.angle += (R() - 0.5) * (p.panic > 0 ? 2.5 : 1.6);
@@ -2222,8 +2317,8 @@ function updateCopPed(p, dt) {
   p.shootT -= dt;
   const vsHeli = player.car && player.car.kind === 'heli' && player.car.flying;
   if ((vsHeli ? player.wanted >= 1 && d < 430 : player.wanted >= 2 && d < 260) && d > 40 && p.shootT <= 0) {
-    p.shootT = 1.2 - level * 0.08;
-    fireWeapon(p, ta + (R() - 0.5) * 0.12, 1, true);
+    p.shootT = (p.swat ? 0.55 : 1.2) - level * 0.08;
+    fireWeapon(p, ta + (R() - 0.5) * 0.12, p.swat ? 2 : 1, true);
   }
 }
 
@@ -2233,6 +2328,19 @@ function updateProjectiles(dt) {
     const b = projectiles[i];
     b.life -= dt;
     b.x += b.vx * dt; b.y += b.vy * dt;
+    if (b.type === 'molotov') {
+      if (R() < 0.5) spawnFlame(b.x, b.y, 0, -12, 2.2, 0.2);
+      if (b.life <= 0 || isSolid(tileAtPx(b.x, b.y))) {
+        for (let k = 0; k < 14; k++)
+          spawnFlame(b.x + (R() - 0.5) * 46, b.y + (R() - 0.5) * 46, (R() - 0.5) * 30, -20 - R() * 30, 6, 0.8);
+        for (const p of peds) if (!p.dead && dist2(p.x, p.y, b.x, b.y) < 70 * 70) { p.burn = Math.max(p.burn, 2.5); damagePed(p, b.dmg, !b.police, 'fire'); }
+        for (const c2 of cars) if (!c2.dead && !c2.flying && dist2(c2.x, c2.y, b.x, b.y) < 80 * 80) damageCar(c2, 30, !b.police, 'fire');
+        AudioSys.flame();
+        panicNear(b.x, b.y, 260);
+        projectiles.splice(i, 1);
+      }
+      continue;
+    }
     if (b.type === 'bomb') {          // бомбата пада с фитил и гърми на земята
       if (R() < 0.4) FX.smoke(b.x, b.y);
       if (b.life <= 0) { explode(b.x, b.y, !b.police); projectiles.splice(i, 1); }
@@ -2447,7 +2555,7 @@ function restartGame() {
   player.hp = 100; player.armor = 0; player.dead = false; player.busted = false;
   player.car = null; player.onTrain = null;
   player.heat = 0; recalcWanted();
-  player.ammo = [-1, 30, 0, 0, 0]; player.weapon = 1;
+  player.ammo = [-1, 30, 0, 0, 0, 0, 0]; player.weapon = 1;
   mission.active = false; mission.target = null; mission.checkpoints = [];
   mission.cooldown = 3;
   genCityMap(0);
@@ -2734,7 +2842,7 @@ function drawPickups() {
     ctx.beginPath(); ctx.moveTo(-9, -9); ctx.lineTo(9, 9); ctx.moveTo(9, -9); ctx.lineTo(-9, 9); ctx.stroke();
     ctx.font = 'bold 11px sans-serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    const icons = { health: '➕', armor: '🛡', money: '💰', pistol: '🔫', mg: '🔫', flame: '🔥', rocket: '🚀' };
+    const icons = { health: '➕', armor: '🛡', money: '💰', pistol: '🔫', mg: '🔫', flame: '🔥', rocket: '🚀', molotov: '🍾', zap: '⚡', dd: '✖', invis: '👁' };
     ctx.fillText(icons[pk.type] || '?', 0, 0);
     ctx.restore();
   }
@@ -3123,6 +3231,7 @@ function drawPlayer() {
   if (player.car || player.onTrain || player.dead || player.busted) return;
   const s = worldToScreen(player.x, player.y);
   ctx.save();
+  if (player.invis > 0) ctx.globalAlpha = 0.45;
   ctx.translate(s.x, s.y);
   ctx.scale(camZoom, camZoom);
   ctx.rotate(player.angle);
@@ -4022,8 +4131,8 @@ function drawHUD() {
 
   // === Дясно: издирване под минимапата ===
   const mini = { x0: VW - clamp(Math.min(VW, VH) * 0.22, 90, 150) - 10, y0: 10, size: clamp(Math.min(VW, VH) * 0.22, 90, 150) };
-  const headR = 9;
-  for (let i = 0; i < 4; i++) {
+  const headR = 8;
+  for (let i = 0; i < 6; i++) {
     drawPoliceHead(mini.x0 + 12 + i * (headR * 2.4), mini.y0 + mini.size + 16, headR, i < player.wanted);
   }
 
