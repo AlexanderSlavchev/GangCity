@@ -830,6 +830,10 @@ const CAR_KINDS = {
   sedan:  { name: 'Комета',    l: 42, w: 22, maxSpeed: 280, accel: 210, hp: 100, mass: 1 },
   taxi:   { name: 'Такси',     l: 42, w: 22, maxSpeed: 300, accel: 230, hp: 100, mass: 1 },
   sport:  { name: 'Вихър GT',  l: 40, w: 20, maxSpeed: 440, accel: 360, hp: 90,  mass: 0.9 },
+  toro:   { name: 'Торо V12',   l: 42, w: 21, maxSpeed: 520, accel: 430, hp: 80, mass: 0.9 },
+  cavallo:{ name: 'Кавало GT',  l: 43, w: 20, maxSpeed: 545, accel: 450, hp: 75, mass: 0.85 },
+  volta:  { name: 'Волта S',    l: 44, w: 21, maxSpeed: 485, accel: 520, hp: 95, mass: 1.05 },
+  cabrio: { name: 'Бриз кабрио',l: 42, w: 21, maxSpeed: 430, accel: 330, hp: 70, mass: 0.95 },
   bus:    { name: 'Автобус',   l: 78, w: 25, maxSpeed: 190, accel: 120, hp: 220, mass: 2.6 },
   truck:  { name: 'Камион',    l: 62, w: 25, maxSpeed: 210, accel: 140, hp: 180, mass: 2.2 },
   police: { name: 'Патрулка',  l: 44, w: 22, maxSpeed: 400, accel: 320, hp: 120, mass: 1.1 },
@@ -841,13 +845,19 @@ const CAR_KINDS = {
 };
 const CAR_COLORS = ['#c0392b', '#2e6bb5', '#3f9a4d', '#c9b530', '#9b59b6', '#2aa5a0', '#e07b28', '#dadfe4', '#37474f', '#a56a5a', '#5d4a7e', '#7a2c2c'];
 
+const EXOTIC_COLORS = {
+  toro:    ['#f2c718', '#e07b28', '#7ec850', '#f2f2f2', '#111418'],
+  cavallo: ['#d0231f', '#d0231f', '#c8171c', '#f2c718', '#111418'],
+  volta:   ['#f4f5f7', '#c8ccd2', '#2b2f36', '#8c1d22', '#2e5da8'],
+  cabrio:  ['#e05a8a', '#2aa5a0', '#f2c718', '#c0392b', '#dadfe4'],
+};
 function makeCar(x, y, angle, kind) {
   const k = CAR_KINDS[kind];
   return {
     x, y, angle, speed: 0,
     kind, name: k.name, l: k.l, w: k.w, mass: k.mass,
     r: Math.max(14, k.l * 0.31),
-    color: kind === 'tank' || kind === 'cannon' ? '#4d5a3c' : kind === 'heli' ? '#37414a' : kind === 'swatvan' ? '#22303c' : kind === 'fbi' ? '#101418' : kind === 'police' ? '#20375c' : (kind === 'taxi' ? '#e8b800' : (kind === 'bus' ? '#b05c2a' : CAR_COLORS[Math.floor(R() * CAR_COLORS.length)])),
+    color: EXOTIC_COLORS[kind] ? EXOTIC_COLORS[kind][Math.floor(R() * EXOTIC_COLORS[kind].length)] : kind === 'tank' || kind === 'cannon' ? '#4d5a3c' : kind === 'heli' ? '#37414a' : kind === 'swatvan' ? '#22303c' : kind === 'fbi' ? '#101418' : kind === 'police' ? '#20375c' : (kind === 'taxi' ? '#e8b800' : (kind === 'bus' ? '#b05c2a' : CAR_COLORS[Math.floor(R() * CAR_COLORS.length)])),
     maxSpeed: k.maxSpeed * (0.92 + R() * 0.16), accel: k.accel,
     hp: k.hp, maxHp: k.hp, dead: false, burnT: 0, burn: 0,
     dir: 0, aiPause: 0, siren: 0, marked: false, parked: false, turned: false,
@@ -1034,7 +1044,7 @@ function spawnWorld() {
     const s = randomRoadSpot();
     if (!s) continue;
     const r = R();
-    const kind = r < 0.1 ? 'taxi' : r < 0.16 ? 'sport' : r < 0.24 ? 'bus' : r < 0.34 ? 'truck' : r < 0.4 ? 'police' : 'sedan';
+    const kind = r < 0.1 ? 'taxi' : r < 0.16 ? 'sport' : r < 0.18 ? 'toro' : r < 0.2 ? 'cavallo' : r < 0.24 ? 'volta' : r < 0.27 ? 'cabrio' : r < 0.34 ? 'bus' : r < 0.42 ? 'truck' : r < 0.47 ? 'police' : 'sedan';
     const c = makeCar(s.x, s.y, DIR_ANG[s.dir], kind);
     c.dir = s.dir;
     cars.push(c);
@@ -1043,7 +1053,8 @@ function spawnWorld() {
   for (let i = 0; i < 400 && placed < 7; i++) {
     const tx = 3 + Math.floor(R() * (MW - 6)), ty = 3 + Math.floor(R() * (MH - 6));
     if (tileAt(tx, ty) !== T.SIDE) continue;
-    const c = makeCar(tx * TILE + TILE / 2, ty * TILE + TILE / 2, Math.floor(R() * 4) * Math.PI / 2, R() < 0.45 ? 'sport' : 'sedan');
+    const c = makeCar(tx * TILE + TILE / 2, ty * TILE + TILE / 2, Math.floor(R() * 4) * Math.PI / 2,
+      R() < 0.5 ? ['toro', 'cavallo', 'volta', 'cabrio', 'sport'][Math.floor(R() * 5)] : 'sedan');
     c.parked = true;
     cars.push(c); placed++;
   }
@@ -1951,7 +1962,7 @@ function updateCrusher(dt) {
   if (c.gear || c.kind === 'tank' || c.kind === 'cannon' || c.kind === 'heli') {
     showMsg('Пресата: "Военна техника не приемаме..."', 2); crusherCd = 4; return;
   }
-  const pay = c.kind === 'police' ? 1200 : c.kind === 'sport' ? 900
+  const pay = (c.kind === 'toro' || c.kind === 'cavallo') ? 1500 : c.kind === 'police' ? 1200 : c.kind === 'volta' ? 1100 : c.kind === 'sport' ? 900 : c.kind === 'cabrio' ? 800
     : (c.kind === 'bus' || c.kind === 'truck') ? 700 : c.kind === 'taxi' ? 500 : 400;
   exitCar();
   const idx = cars.indexOf(c);
@@ -2641,7 +2652,7 @@ function recycle(dt) {
       const d = dist2(s.x, s.y, player.x, player.y);
       if (d > 600 * 600 && d < FAR) {
         const r = R();
-        const kind = r < 0.1 ? 'taxi' : r < 0.16 ? 'sport' : r < 0.24 ? 'bus' : r < 0.34 ? 'truck' : r < 0.38 ? 'police' : 'sedan';
+        const kind = r < 0.1 ? 'taxi' : r < 0.16 ? 'sport' : r < 0.18 ? 'toro' : r < 0.2 ? 'cavallo' : r < 0.24 ? 'volta' : r < 0.27 ? 'cabrio' : r < 0.34 ? 'bus' : r < 0.42 ? 'truck' : r < 0.46 ? 'police' : 'sedan';
         const c = makeCar(s.x, s.y, DIR_ANG[s.dir], kind);
         c.dir = s.dir;
         cars.push(c);
@@ -3159,6 +3170,46 @@ function renderCarSprite(kind, color, burned) {
     for (let x = 6; x < L * 0.62; x += 5) {                    // ребра на контейнера
       g.beginPath(); g.moveTo(x, 1.5); g.lineTo(x, W - 1.5); g.stroke();
     }
+  } else if (kind === 'toro' || kind === 'cavallo') {
+    // Суперкола: кабина напред, двигател с решетки зад нея, спойлер
+    const cab0 = L * 0.42, cab1 = L * 0.70;
+    glassPane(g, cab0, 1.8, cab1 - cab0, W - 3.6);
+    g.fillStyle = shade(body, 0.88);
+    g.fillRect(cab0 + (cab1 - cab0) * 0.30, 3, (cab1 - cab0) * 0.45, W - 6);
+    g.fillStyle = 'rgba(0,0,0,0.55)';                       // решетки над двигателя
+    for (let x = L * 0.14; x < L * 0.36; x += 2.6) g.fillRect(x, 3, 1.3, W - 6);
+    g.fillRect(cab0 - 5, 0.8, 4, 2.2);                      // странични въздухозаборници
+    g.fillRect(cab0 - 5, W - 3, 4, 2.2);
+    g.fillStyle = shade(body, 0.6);                         // заден спойлер
+    g.fillRect(0.8, 1.2, 2.4, W - 2.4);
+    if (kind === 'cavallo') {                               // жълт щит на капака
+      g.fillStyle = '#f2c718';
+      g.fillRect(L * 0.80, W / 2 - 1.6, 2.6, 3.2);
+    }
+  } else if (kind === 'volta') {
+    // Електрическа: панорамен стъклен таван, чисти линии, без фуги
+    glassPane(g, L * 0.24, 1.6, L * 0.55, W - 3.2);
+    grad = g.createLinearGradient(0, 2, 0, W - 2);
+    grad.addColorStop(0, 'rgba(255,255,255,0.30)');
+    grad.addColorStop(1, 'rgba(0,0,0,0.20)');
+    g.fillStyle = grad;
+    g.fillRect(L * 0.24, 1.6, L * 0.55, W - 3.2);
+    g.fillStyle = 'rgba(255,255,255,0.5)';                  // хромирана Т-емблема
+    g.fillRect(L * 0.86, W / 2 - 0.5, 3, 1);
+    g.fillRect(L * 0.88, W / 2 - 1.6, 1, 3.2);
+  } else if (kind === 'cabrio') {
+    // Кабриолет: отворен — вана, седалки, само предно стъкло, сгънат гюрук
+    g.fillStyle = shade(body, 0.55);
+    g.fillRect(L * 0.28, 2.2, L * 0.40, W - 4.4);
+    g.fillStyle = '#2a2126';
+    g.fillRect(L * 0.34, 3, 4.5, (W - 6) / 2 - 0.5);
+    g.fillRect(L * 0.34, W / 2 + 0.5, 4.5, (W - 6) / 2 - 0.5);
+    g.fillRect(L * 0.46, 3, 4.5, W - 6);
+    glassPane(g, L * 0.66, 2, 2.6, W - 4);
+    g.fillStyle = '#1c1c20';
+    g.fillRect(L * 0.20, 1.8, 3.4, W - 3.6);
+    g.fillStyle = 'rgba(255,255,255,0.10)';
+    g.fillRect(L * 0.20, 1.8, 3.4, 1.2);
   } else {
     // Седан / спортна / такси / патрулка
     const cabX0 = kind === 'sport' ? L * 0.24 : L * 0.28;
@@ -4654,7 +4705,7 @@ function frame(now) {
       dist2(player.x, player.y, landmarks[0].x, landmarks[0].y) < 500 * 500);
     AudioSys.update(dt, {
       inCar: !!player.car,
-      speed: player.car ? Math.abs(player.car.speed) : 0,
+      speed: player.car ? Math.abs(player.car.speed) * (player.car.kind === 'volta' ? 0.25 : 1) : 0,
       skid: skidActive,
       wet: weather.wet, rain: weather.rain,
       night: nightAmount(),
