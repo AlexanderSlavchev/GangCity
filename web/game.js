@@ -196,6 +196,9 @@ function laneDirAt(tx, ty) {
 let cityIdx = 0;
 let theme = THEMES[0];
 let hospitalDoor = null, policeDoor = null, resprayDoor = null;
+let crusherDoor = null, churchDoor = null;
+let crusherCd = 0, churchCd = 0;
+const taxiJob = { fare: null, dest: null, t: 0, pay: 0, offCd: 0 };
 const phones = [];
 const frenzySpots = [];
 const miniCanvas = document.createElement('canvas');
@@ -325,6 +328,8 @@ function genCityMap(idx) {
   hospitalDoor = blockDoor(hospitalBlock);
   policeDoor = blockDoor(policeBlock);
   resprayDoor = blockDoor(resprayBlock);
+  crusherDoor = nearestSideTile((MW - 9) * TILE, (MH - 9) * TILE, 1400) || { x: (MW - 9) * TILE, y: (MH - 9) * TILE };
+  churchDoor = nearestSideTile(9 * TILE, 9 * TILE, 1400) || { x: 9 * TILE, y: 9 * TILE };
 
   // Ленти на решетъчните улици (за трафика и маркировката)
   for (let y = 0; y < MH; y++) {
@@ -487,6 +492,8 @@ function buildRuse(blockType) {
   hospitalDoor = nearestSideTile(13 * TILE, 21 * TILE, 500) || { x: 13 * TILE, y: 21 * TILE };
   policeDoor = nearestSideTile(13 * TILE, 46 * TILE, 500) || { x: 13 * TILE, y: 46 * TILE };
   resprayDoor = nearestSideTile(50 * TILE, 47 * TILE, 500) || { x: 50 * TILE, y: 47 * TILE };
+  crusherDoor = nearestSideTile((MW - 9) * TILE, (MH - 9) * TILE, 1400) || { x: (MW - 9) * TILE, y: (MH - 9) * TILE };
+  churchDoor = nearestSideTile(9 * TILE, 9 * TILE, 1400) || { x: 9 * TILE, y: 9 * TILE };
 }
 
 function placePhonesFrenzy() {
@@ -1843,6 +1850,78 @@ function exitCar() {
   player.x = pos.x; player.y = pos.y;
   player.car = null;
 }
+function updateCrusher(dt) {
+  crusherCd -= dt;
+  if (!player.car || player.car.dead || crusherCd > 0) return;
+  const c = player.car;
+  if (dist2(c.x, c.y, crusherDoor.x, crusherDoor.y) > 60 * 60) return;
+  if (c.gear || c.kind === 'tank' || c.kind === 'cannon' || c.kind === 'heli') {
+    showMsg('Пресата: "Военна техника не приемаме..."', 2); crusherCd = 4; return;
+  }
+  const pay = c.kind === 'police' ? 1200 : c.kind === 'sport' ? 900
+    : (c.kind === 'bus' || c.kind === 'truck') ? 700 : c.kind === 'taxi' ? 500 : 400;
+  exitCar();
+  const idx = cars.indexOf(c);
+  if (idx >= 0) cars.splice(idx, 1);
+  FX.sparks(c.x, c.y); FX.glass(c.x, c.y); AudioSys.hit();
+  addScore(pay, c.x, c.y);
+  showMsg('🗜 Пресата я глътна. +' + fmtMoney(pay), 2.5);
+  crusherCd = 3;
+}
+function updateChurch(dt) {
+  churchCd -= dt;
+  if (player.car || churchCd > 0) return;
+  if (dist2(player.x, player.y, churchDoor.x, churchDoor.y) > 45 * 45) return;
+  if (score < 2000) { showMsg('✝ "Спасението иска дарение от $2,000, чадо."', 2.5); churchCd = 5; return; }
+  score -= 2000;
+  const sv = { score, lives, level, mult, missionsDone, cityIdx, ammo: player.ammo.slice(), weapon: player.weapon };
+  if (typeof respect !== 'undefined') sv.respect = respect.slice();
+  try { localStorage.setItem('gangcity_save', JSON.stringify(sv)); } catch (e) {}
+  AudioSys.pickup();
+  showMsg('✝ Спасен си, синко. Прогресът е записан. -$2,000', 3);
+  churchCd = 8;
+}
+function updateTaxi(dt) {
+  const inTaxi = player.car && player.car.kind === 'taxi' && !player.car.dead;
+  if (!inTaxi) {
+    if (taxiJob.fare || taxiJob.dest) {
+      taxiJob.offCd += dt;
+      if (taxiJob.offCd > 8) {
+        taxiJob.fare = null; taxiJob.dest = null; taxiJob.offCd = 0;
+        showMsg('🚕 Клиентът си хвана друго такси.', 2);
+      }
+    }
+    return;
+  }
+  taxiJob.offCd = 0;
+  if (!taxiJob.fare && !taxiJob.dest) {
+    const spot = randomSideSpotPx(400);
+    if (spot) { taxiJob.fare = spot; showMsg('🚕 Клиент те чака — следвай жълтата стрелка.', 2.5); }
+    return;
+  }
+  if (taxiJob.fare) {
+    if (dist2(player.car.x, player.car.y, taxiJob.fare.x, taxiJob.fare.y) < 80 * 80 && Math.abs(player.car.speed) < 40) {
+      const dest = randomSideSpotPx(500);
+      if (dest) {
+        const d = Math.sqrt(dist2(player.car.x, player.car.y, dest.x, dest.y));
+        taxiJob.dest = dest; taxiJob.fare = null;
+        taxiJob.t = 12 + d / 90;
+        taxiJob.pay = 150 + Math.floor(d * 0.6);
+        showMsg('🚕 Карай! ' + fmtMoney(taxiJob.pay) + ', ако стигнеш навреме.', 2.5);
+        AudioSys.pickup();
+      }
+    }
+  } else if (taxiJob.dest) {
+    taxiJob.t -= dt;
+    if (taxiJob.t <= 0) { showMsg('🚕 Клиентът избяга без да плати...', 2); taxiJob.dest = null; return; }
+    if (dist2(player.car.x, player.car.y, taxiJob.dest.x, taxiJob.dest.y) < 80 * 80 && Math.abs(player.car.speed) < 40) {
+      addScore(taxiJob.pay, player.car.x, player.car.y);
+      AudioSys.pickup();
+      showMsg('🚕 Доволен клиент! Огледай се за следващия.', 2);
+      taxiJob.dest = null;
+    }
+  }
+}
 function updateRespray(dt) {
   resprayCooldown -= dt;
   if (!player.car || resprayCooldown > 0 || player.car.dead) return;
@@ -2556,9 +2635,25 @@ function restartGame() {
   player.car = null; player.onTrain = null;
   player.heat = 0; recalcWanted();
   player.ammo = [-1, 30, 0, 0, 0, 0, 0]; player.weapon = 1;
+  player.dd = 0; player.invis = 0;
+  taxiJob.fare = null; taxiJob.dest = null;
   mission.active = false; mission.target = null; mission.checkpoints = [];
   mission.cooldown = 3;
-  genCityMap(0);
+  let city = 0;
+  try {
+    const sv = JSON.parse(localStorage.getItem('gangcity_save') || 'null');
+    if (sv) {                                        // ✝ продължаваме от спасението
+      score = sv.score || 0; lives = sv.lives != null ? sv.lives : 4;
+      level = sv.level || 1; mult = sv.mult || 1;
+      missionsDone = sv.missionsDone || 0;
+      if (Array.isArray(sv.ammo)) player.ammo = sv.ammo.slice();
+      if (sv.weapon) player.weapon = sv.weapon;
+      if (typeof respect !== 'undefined' && Array.isArray(sv.respect)) { respect[0] = sv.respect[0] || 0; respect[1] = sv.respect[1] || 0; }
+      city = sv.cityIdx || 0;
+      showMsg('✝ Продължаваш от последното спасение.', 3);
+    }
+  } catch (e) {}
+  genCityMap(city);
   playerToStart();
   spawnWorld();
 }
@@ -3506,6 +3601,8 @@ function drawBuildings() {
 
   // Знаци на специалните сгради (над входовете им)
   drawDoorLabel(hospitalDoor, '#e04545', '➕', 'БОЛНИЦА');
+  drawDoorLabel(crusherDoor, '#e8a020', '🗜', 'ПРЕСА');
+  drawDoorLabel(churchDoor, '#c8b060', '✝', 'ЦЪРКВА');
   drawDoorLabel(policeDoor, '#8ab6e8', '🛡', 'УЧАСТЪК');
   drawDoorLabel(resprayDoor, '#50b4ff', '🎨', 'БОЯДЖИЙНИЦА');
 
@@ -3914,6 +4011,31 @@ function drawDoorLabel(door, color, icon, label) {
   ctx.fillText(label, s.x, s.y - 28 * camZoom);
 }
 
+function drawTaxiMarker() {
+  if (!(player.car && player.car.kind === 'taxi' && !player.car.dead)) return;
+  const pt = taxiJob.dest || taxiJob.fare;
+  if (!pt) return;
+  const s = worldToScreen(pt.x, pt.y);
+  ctx.strokeStyle = '#e8b800'; ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.arc(s.x, s.y, (34 + Math.sin(gameT * 4) * 6) * camZoom, 0, Math.PI * 2);
+  ctx.stroke();
+  if (s.x < 0 || s.y < 0 || s.x > VW || s.y > VH) {
+    const a = Math.atan2(pt.y - player.y, pt.x - player.x);
+    const mx = VW / 2 + Math.cos(a) * Math.min(VW, VH) * 0.36;
+    const my = VH / 2 + Math.sin(a) * Math.min(VW, VH) * 0.36;
+    ctx.save(); ctx.translate(mx, my); ctx.rotate(a);
+    ctx.fillStyle = '#e8b800';
+    ctx.beginPath(); ctx.moveTo(14, 0); ctx.lineTo(-8, 8); ctx.lineTo(-8, -8); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+  if (taxiJob.dest) {
+    ctx.fillStyle = '#e8b800';
+    ctx.font = 'bold 14px sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillText('🚕 ' + Math.ceil(taxiJob.t) + ' сек · ' + fmtMoney(taxiJob.pay), VW / 2, 58);
+  }
+}
 function drawMissionMarkers() {
   if (!mission.active) return;
   let tx = null, ty = null, color = '#5c8';
@@ -4353,6 +4475,9 @@ function frame(now) {
     updateMission(dt);
     updateFrenzy(dt);
     updateRespray(dt);
+    updateCrusher(dt);
+    updateChurch(dt);
+    updateTaxi(dt);
     updateMetro(dt);
     updateWeather(dt);
     recycle(dt);
@@ -4415,6 +4540,7 @@ function frame(now) {
   drawProjectiles();
   drawParticles();
   drawMissionMarkers();
+  drawTaxiMarker();
   drawBuildings();          // сградите закриват всичко зад тях (както в класиката)
   drawLandmarks();          // куполи, НДК, стадионът, фонтанът
   drawMetro();              // метрото е над всичко — то е надземна линия
