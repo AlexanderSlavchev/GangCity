@@ -6,9 +6,9 @@ import android.view.View
 import android.view.WindowManager
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import androidx.activity.ComponentActivity
+import android.app.Activity
 
-class MainActivity : ComponentActivity() {
+class MainActivity : Activity() {
 
     private lateinit var webView: WebView
 
