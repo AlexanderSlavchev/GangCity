@@ -1258,7 +1258,7 @@ function addHeat(amount) {
 function recalcWanted() {
   player.wanted = player.heat >= 360 ? 6 : player.heat >= 300 ? 5 : player.heat >= 260 ? 4 : player.heat >= 140 ? 3 : player.heat >= 60 ? 2 : player.heat >= 15 ? 1 : 0;
 }
-let copsSee = false, lastSeenX = 0, lastSeenY = 0, roadblockCd = 0;
+let copsSee = false, lastSeenX = null, lastSeenY = null, roadblockCd = 0;
 function updateWanted(dt) {
   // GTA2: "треперещите глави" — знае ли полицията къде си?
   copsSee = false;
@@ -1592,10 +1592,17 @@ function updatePhones(dt) {
     }
   }
 }
+function roadNearTile(tx, ty, r) {
+  for (let dy = -r; dy <= r; dy++)
+    for (let dx = -r; dx <= r; dx++)
+      if (tileAt(tx + dx, ty + dy) === T.ROAD) return true;
+  return false;
+}
 function randomSideSpotPx(minDistFromPlayer) {
   for (let i = 0; i < 300; i++) {
     const tx = 3 + Math.floor(R() * (MW - 6)), ty = 3 + Math.floor(R() * (MH - 6));
     if (tileAt(tx, ty) !== T.SIDE) continue;
+    if (!roadNearTile(tx, ty, 2)) continue;   // без затворени дворове — до точката се стига с кола
     const x = tx * TILE + TILE / 2, y = ty * TILE + TILE / 2;
     if (dist2(x, y, player.x, player.y) > minDistFromPlayer * minDistFromPlayer) return { x, y };
   }
@@ -2293,6 +2300,7 @@ function updatePlayerCar(dt, inp, c) {
 function updateArmyTank(c, dt) {
   if (player.wanted < 5) { c.army = false; c.sentry = false; return; } // отбой — танкът е зарязан
   if (!copsSee) {                                        // изгубили са те — отиват на последната позиция
+    if (lastSeenX === null) { c.speed *= (1 - 1.5 * dt); return; }
     const dls = dist2(c.x, c.y, lastSeenX, lastSeenY);
     if (dls < 200 * 200) { c.speed *= (1 - 1.5 * dt); return; }
   }
@@ -2356,7 +2364,8 @@ function updateCarAI(c, dt) {
   if (c.army && c !== player.car) { updateArmyTank(c, dt); return; }
   if (c === player.car || c.parked) return;
 
-  if ((c.kind === 'police' || c.kind === 'swatvan' || c.kind === 'fbi') && player.wanted > 0 && player.invis <= 0 && !player.dead && !player.busted) {
+  if (c.patrolT > 0) c.patrolT -= dt;
+  if ((c.kind === 'police' || c.kind === 'swatvan' || c.kind === 'fbi') && (c.patrolT <= 0 || copsSee) && player.wanted > 0 && player.invis <= 0 && !player.dead && !player.busted) {
     updatePoliceCar(c, dt);
     return;
   }
@@ -2430,11 +2439,16 @@ function updateCarAI(c, dt) {
 function updatePoliceCar(c, dt) {
   c.siren += dt * 8;
   // GTA2: гонят те само ако те виждат; иначе отиват на последната позната позиция
+  if (!copsSee && lastSeenX === null) { c.patrolT = 8; return; }  // няма следа — патрулират
   const px = copsSee ? (player.car ? player.car.x : player.x) : lastSeenX;
   const py = copsSee ? (player.car ? player.car.y : player.y) : lastSeenY;
   const ta = Math.atan2(py - c.y, px - c.x);
   c.angle += clamp(angDiff(c.angle, ta), -2.8 * dt, 2.8 * dt);
   const d = Math.sqrt(dist2(c.x, c.y, px, py));
+  if (!copsSee && d < 130) {
+    c.bored = (c.bored || 0) + dt;
+    if (c.bored > 5) { c.bored = 0; c.patrolT = 14; return; }
+  } else c.bored = 0;
   const aggr = 0.65 + level * 0.06 + player.wanted * 0.04;
   const want = d > 70 ? c.maxSpeed * clamp(aggr, 0.6, 0.98) : 30;
   c.speed += clamp(want - c.speed, -400 * dt, c.accel * dt);
