@@ -875,6 +875,7 @@ const player = {
   hp: 100, armor: 0,
   car: null, onTrain: null, weapon: 1, ammo: [-1, 30, 0, 0, 0, 0, 0],
   fireT: 0, dead: false, deadT: 0, busted: false, bustedT: 0,
+  dd: 0, invis: 0,
   wanted: 0, heat: 0, lastCrimeT: -999
 };
 let score = 0, mult = 1, lives = 4, level = 1;
@@ -1278,7 +1279,7 @@ function updateWanted(dt) {
       const s2 = randomRoadSpot();
       if (s2 && dist2(s2.x, s2.y, player.x, player.y) > 600 * 600) {
         const t2 = makeCar(s2.x, s2.y, DIR_ANG[s2.dir], 'tank');
-        t2.army = true; t2.turret = t2.angle;
+        t2.army = true; t2.turret = t2.angle; t2.dir = s2.dir;
         cars.push(t2);
         showMsg('АРМИЯТА Е НА УЛИЦАТА!', 2.5);
       }
@@ -2214,6 +2215,7 @@ function updatePlayerCar(dt, inp, c) {
 
 // Армейски танк: гони играча и стреля със снаряди
 function updateArmyTank(c, dt) {
+  if (player.wanted < 5) { c.army = false; return; } // отбой — танкът е зарязан
   const dx = player.x - c.x, dy = player.y - c.y;
   const want = Math.atan2(dy, dx);
   let da = want - c.angle;
@@ -2347,7 +2349,7 @@ function updatePoliceCar(c, dt) {
   if (pos.hit) c.speed *= -0.4;
   c.x = pos.x; c.y = pos.y;
 
-  if (player.car && dist2(c.x, c.y, player.car.x, player.car.y) < (c.r + player.car.r) * (c.r + player.car.r) && Math.abs(c.speed) > 100) {
+  if (player.car && !player.car.flying && dist2(c.x, c.y, player.car.x, player.car.y) < (c.r + player.car.r) * (c.r + player.car.r) && Math.abs(c.speed) > 100) {
     damageCar(player.car, 9, false);
     player.car.speed *= 0.82;
     c.speed *= 0.5;
@@ -4080,6 +4082,7 @@ function drawTaxiMarker() {
     ctx.font = 'bold 14px sans-serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'top';
     ctx.fillText('🚕 ' + Math.ceil(taxiJob.t) + ' сек · ' + fmtMoney(taxiJob.pay), VW / 2, 58);
+    ctx.textAlign = 'left';
   }
 }
 function drawMissionMarkers() {
@@ -4300,8 +4303,9 @@ function drawHUD() {
   // === Дясно: издирване под минимапата ===
   const mini = { x0: VW - clamp(Math.min(VW, VH) * 0.22, 90, 150) - 10, y0: 10, size: clamp(Math.min(VW, VH) * 0.22, 90, 150) };
   const headR = 8;
+  const headStep = Math.min(headR * 2.4, (mini.size - 16) / 5);
   for (let i = 0; i < 6; i++) {
-    drawPoliceHead(mini.x0 + 12 + i * (headR * 2.4), mini.y0 + mini.size + 16, headR, i < player.wanted);
+    drawPoliceHead(mini.x0 + 10 + i * headStep, mini.y0 + mini.size + 16, headR, i < player.wanted);
   }
 
   // === Съобщения ===
@@ -4526,8 +4530,9 @@ function frame(now) {
     updateTaxi(dt);
     {
       const z = gangAt(player.x);
-      if (z !== gangZoneLast) {
+      if (z !== gangZoneLast && gameT - (window._zoneMsgT || -99) > 6) {
         gangZoneLast = z;
+        window._zoneMsgT = gameT;
         if (z >= 0) {
           const r = Math.round(respect[z]);
           showMsg(GANGS[z].name + ' държат този район. Уважение: ' + (r > 0 ? '+' : '') + r +
