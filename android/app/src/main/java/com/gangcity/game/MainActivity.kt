@@ -8,42 +8,55 @@ import android.net.NetworkCapabilities
 import android.os.Bundle
 import android.view.View
 import android.view.WindowManager
+import android.webkit.JavascriptInterface
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import com.google.android.gms.ads.AdRequest
+import com.google.android.gms.ads.LoadAdError
+import com.google.android.gms.ads.MobileAds
+import com.google.android.gms.ads.OnUserEarnedRewardListener
+import com.google.android.gms.ads.rewarded.RewardedAd
+import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
 
 class MainActivity : Activity() {
 
     private lateinit var webView: WebView
     private var fellBack = false
+    private var rewardedAd: RewardedAd? = null
 
     companion object {
         // Хибриден режим: първо сайтът (винаги последната версия),
         // при липса на интернет или грешка — вградената в APK-то игра.
         const val REMOTE_URL = "https://alexanderslavchev.github.io/GangCity/web/"
         const val LOCAL_URL = "file:///android_asset/index.html"
+
+        // ТЕСТОВО ID на Google за rewarded реклами. Работи веднага, но не носи
+        // пари. Смени с истинското от AdMob (Apps -> Ad units) при пускане.
+        const val REWARDED_AD_UNIT = "ca-app-pub-3940256099942544/5224354917"
     }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Екранът да не заспива по време на игра
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
+        MobileAds.initialize(this) {}
+        loadRewarded()
 
         webView = WebView(this).apply {
             settings.javaScriptEnabled = true
-            settings.domStorageEnabled = true          // за записа от църквата (localStorage)
+            settings.domStorageEnabled = true
             settings.mediaPlaybackRequiresUserGesture = false
             setBackgroundColor(0xFF0A0A12.toInt())
+            addJavascriptInterface(AdsInterface(), "AndroidAds")
             webViewClient = object : WebViewClient() {
                 override fun onReceivedError(
                     view: WebView, request: WebResourceRequest, error: WebResourceError
                 ) {
-                    // Само главната страница ни интересува; счупена
-                    // картинка или заявка не бива да сваля цялата игра.
                     if (request.isForMainFrame) fallBackToLocal()
                 }
 
@@ -57,6 +70,38 @@ class MainActivity : Activity() {
         }
         setContentView(webView)
         hideSystemUi()
+    }
+
+    /** Мостът, който играта вижда като window.AndroidAds */
+    inner class AdsInterface {
+        @JavascriptInterface
+        fun isReady(): Boolean = rewardedAd != null
+
+        @JavascriptInterface
+        fun show(hook: String) {
+            runOnUiThread {
+                val ad = rewardedAd ?: return@runOnUiThread
+                rewardedAd = null
+                ad.show(this@MainActivity, OnUserEarnedRewardListener {
+                    // Наградата се дава само при изгледана реклама
+                    val safe = hook.replace(Regex("[^a-z_]"), "")
+                    webView.evaluateJavascript(
+                        "window.onAdReward && window.onAdReward('" + safe + "')", null
+                    )
+                })
+                loadRewarded()   // зареждаме следващата отрано
+            }
+        }
+    }
+
+    private fun loadRewarded() {
+        RewardedAd.load(
+            this, REWARDED_AD_UNIT, AdRequest.Builder().build(),
+            object : RewardedAdLoadCallback() {
+                override fun onAdLoaded(ad: RewardedAd) { rewardedAd = ad }
+                override fun onAdFailedToLoad(error: LoadAdError) { rewardedAd = null }
+            }
+        )
     }
 
     private fun fallBackToLocal() {

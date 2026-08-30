@@ -149,7 +149,7 @@ const THEMES = [
     streetNames: ['бул. Придунавски', 'ул. Княжеска', 'ул. Александровска', 'ул. Хан Аспарух', 'бул. Ген. Скобелев', 'бул. Цар Фердинанд', 'ул. Ангел Кънчев', 'бул. Цар Освободител', 'ул. Църковна независимост', 'ул. Муткурова', 'ул. Петко Д. Петков', 'ул. Стефан Караджа', 'ул. Борисова']
   },
   {
-    name: 'Либърти Сити',
+    name: 'Стоманград',
     cast: 'rgb(228,234,242)',   // студено сиво-синьо
     walls: ['#9a7b64', '#8b8d99', '#ab9070', '#7d8c78', '#997f9e', '#b09a80', '#82909f', '#a58474', '#c0aa8a', '#6f7f8f'],
     roofs: ['#6e6a66', '#7a7672', '#5f6468', '#746e64', '#686e62', '#7e7468'],
@@ -159,7 +159,7 @@ const THEMES = [
     stations: ['Север', 'Изток', 'Юг', 'Запад']
   },
   {
-    name: 'Сан Андреас',
+    name: 'Сан Прахос',
     cast: 'rgb(252,232,216)',   // червеникава мараня
     walls: ['#e8ccb8', '#d4e0c4', '#f0e2c4', '#c4d8e4', '#e4c8d8', '#f0d2a8', '#d6cab2', '#b8d0c2', '#f4e8d0', '#ccb8a0'],
     roofs: ['#a89078', '#98a088', '#b0a080', '#8a9aa4', '#a4988a', '#9aa48a'],
@@ -169,7 +169,7 @@ const THEMES = [
     stations: ['Север', 'Изток', 'Юг', 'Запад']
   },
   {
-    name: 'Вайс Сити',
+    name: 'Вайб Сити',
     cast: 'rgb(250,228,240)',   // розово
     walls: ['#e8a8c0', '#a8d8d0', '#f0d8b0', '#c4b0e0', '#f0b8a8', '#b8e0f0', '#e8e0d0', '#d8b8d8', '#f8d0c8', '#b0c8e8'],
     roofs: ['#95788a', '#7a8a92', '#a08a92', '#8a927a', '#928a9a'],
@@ -209,6 +209,53 @@ function gangAt(x) {
   const f = x / (MW * TILE);
   return f < 0.42 ? 0 : f > 0.58 ? 1 : -1;   // средата е ничия земя
 }
+
+/* ---------------- Реклами (AdMob мост към Android обвивката) ---------------- */
+let adKeepWeapons = false;
+const AdBridge = {
+  btnBribe: null, btnRevive: null,
+  has() {
+    try { return typeof AndroidAds !== 'undefined' && AndroidAds.isReady(); }
+    catch (e) { return false; }
+  },
+  show(hook) { try { AndroidAds.show(hook); } catch (e) {} },
+  init() {
+    const mk = (txt, bottom) => {
+      const b = document.createElement('div');
+      b.textContent = txt;
+      b.style.cssText = 'position:fixed;right:12px;bottom:' + bottom + 'px;z-index:30;display:none;' +
+        'background:rgba(10,10,18,.88);color:#ffd23c;border:1px solid #ffd23c;border-radius:6px;' +
+        'padding:10px 12px;font:700 13px sans-serif;user-select:none;-webkit-user-select:none';
+      document.body.appendChild(b);
+      return b;
+    };
+    this.btnBribe = mk('📺 Реклама → чисто досие', 150);
+    this.btnRevive = mk('📺 Реклама → запази оръжията', 110);
+    const bind = (btn, hook) => {
+      btn.addEventListener('touchstart', (e) => { e.preventDefault(); this.show(hook); }, { passive: false });
+      btn.addEventListener('mousedown', () => this.show(hook));
+    };
+    bind(this.btnBribe, 'bribe');
+    bind(this.btnRevive, 'revive');
+  },
+  update() {
+    if (!this.btnBribe) this.init();
+    const ready = this.has();
+    const showBribe = ready && started && !gameOver && !player.dead && !player.busted && player.wanted >= 3;
+    const showRevive = ready && started && !gameOver && player.dead && !adKeepWeapons;
+    this.btnBribe.style.display = showBribe ? 'block' : 'none';
+    this.btnRevive.style.display = showRevive ? 'block' : 'none';
+  }
+};
+window.onAdReward = function (hook) {
+  if (hook === 'bribe') {
+    player.heat = 0; recalcWanted();
+    showMsg('💵 Рекламата плати подкупа. Досието е чисто.', 2.5);
+  } else if (hook === 'revive') {
+    adKeepWeapons = true;
+    showMsg('Оръжията ще те чакат след болницата.', 2.5);
+  }
+};
 const phones = [];
 const frenzySpots = [];
 const miniCanvas = document.createElement('canvas');
@@ -2076,10 +2123,15 @@ function updatePlayer(dt, inp) {
       if (lives < 0) { gameOver = true; return; }
       player.dead = false; player.hp = 100;
       player.heat = 0; recalcWanted();
-      player.ammo = [-1, 0, 0, 0, 0, 0, 0]; player.weapon = 0;
+      if (adKeepWeapons) {
+        adKeepWeapons = false;
+        showMsg('Болницата те закърпи. Оръжията те чакат под възглавницата. Остават ' + (lives + 1) + ' живота.', 3);
+      } else {
+        player.ammo = [-1, 0, 0, 0, 0, 0, 0]; player.weapon = 0;
+        showMsg('Болницата те закърпи, но оръжията ти изчезнаха. Остават ' + (lives + 1) + ' живота.', 3);
+      }
       mult = Math.max(1, mult - 1);
       player.x = hospitalDoor.x; player.y = hospitalDoor.y;
-      showMsg('Болницата те закърпи, но оръжията ти изчезнаха. Остават ' + (lives + 1) + ' живота.', 3);
     }
     return;
   }
@@ -4682,6 +4734,7 @@ function frame(now) {
     updateCrusher(dt);
     updateChurch(dt);
     updateTaxi(dt);
+    AdBridge.update();
     {
       const z = gangAt(player.x);
       if (z !== gangZoneLast && gameT - (window._zoneMsgT || -99) > 6) {

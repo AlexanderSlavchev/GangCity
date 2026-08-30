@@ -10,6 +10,12 @@
         android:allowBackup="true"
         android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen">
 
+        <!-- ТЕСТОВО AdMob App ID на Google. Като направиш AdMob акаунт,
+             смени го с твоето (ca-app-pub-XXXX~YYYY), иначе истински приходи няма. -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-3940256099942544~3347511713" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
