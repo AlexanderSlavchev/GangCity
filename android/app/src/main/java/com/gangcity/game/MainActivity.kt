@@ -1,16 +1,30 @@
 package com.gangcity.game
 
 import android.annotation.SuppressLint
+import android.app.Activity
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.os.Bundle
 import android.view.View
 import android.view.WindowManager
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import android.app.Activity
 
 class MainActivity : Activity() {
 
     private lateinit var webView: WebView
+    private var fellBack = false
+
+    companion object {
+        // Хибриден режим: първо сайтът (винаги последната версия),
+        // при липса на интернет или грешка — вградената в APK-то игра.
+        const val REMOTE_URL = "https://alexanderslavchev.github.io/GangCity/web/"
+        const val LOCAL_URL = "file:///android_asset/index.html"
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -21,14 +35,40 @@ class MainActivity : Activity() {
 
         webView = WebView(this).apply {
             settings.javaScriptEnabled = true
-            settings.domStorageEnabled = true          // за записване на рекорда (localStorage)
+            settings.domStorageEnabled = true          // за записа от църквата (localStorage)
             settings.mediaPlaybackRequiresUserGesture = false
-            webViewClient = WebViewClient()
             setBackgroundColor(0xFF0A0A12.toInt())
-            loadUrl("file:///android_asset/index.html")
+            webViewClient = object : WebViewClient() {
+                override fun onReceivedError(
+                    view: WebView, request: WebResourceRequest, error: WebResourceError
+                ) {
+                    // Само главната страница ни интересува; счупена
+                    // картинка или заявка не бива да сваля цялата игра.
+                    if (request.isForMainFrame) fallBackToLocal()
+                }
+
+                override fun onReceivedHttpError(
+                    view: WebView, request: WebResourceRequest, response: WebResourceResponse
+                ) {
+                    if (request.isForMainFrame) fallBackToLocal()
+                }
+            }
+            loadUrl(if (isOnline()) REMOTE_URL else LOCAL_URL)
         }
         setContentView(webView)
         hideSystemUi()
+    }
+
+    private fun fallBackToLocal() {
+        if (fellBack) return
+        fellBack = true
+        webView.loadUrl(LOCAL_URL)
+    }
+
+    private fun isOnline(): Boolean {
+        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
+        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
     }
 
     private fun hideSystemUi() {
