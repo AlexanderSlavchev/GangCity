@@ -834,6 +834,8 @@ const CAR_KINDS = {
   truck:  { name: 'Камион',    l: 62, w: 25, maxSpeed: 210, accel: 140, hp: 180, mass: 2.2 },
   police: { name: 'Патрулка',  l: 44, w: 22, maxSpeed: 400, accel: 320, hp: 120, mass: 1.1 },
   tank:   { name: 'Танк',       l: 56, w: 30, maxSpeed: 150, accel: 100, hp: 900, mass: 6 },
+  swatvan:{ name: 'SWAT ван',   l: 52, w: 26, maxSpeed: 390, accel: 260, hp: 300, mass: 2.4 },
+  fbi:    { name: 'Кола на FBI',l: 44, w: 22, maxSpeed: 470, accel: 380, hp: 90,  mass: 1 },
   cannon: { name: 'Оръдие',     l: 34, w: 22, maxSpeed: 0,   accel: 0,   hp: 420, mass: 5 },
   heli:   { name: 'Хеликоптер', l: 52, w: 26, maxSpeed: 330, accel: 210, hp: 240, mass: 1.4 },
 };
@@ -845,11 +847,11 @@ function makeCar(x, y, angle, kind) {
     x, y, angle, speed: 0,
     kind, name: k.name, l: k.l, w: k.w, mass: k.mass,
     r: Math.max(14, k.l * 0.31),
-    color: kind === 'tank' || kind === 'cannon' ? '#4d5a3c' : kind === 'heli' ? '#37414a' : kind === 'police' ? '#20375c' : (kind === 'taxi' ? '#e8b800' : (kind === 'bus' ? '#b05c2a' : CAR_COLORS[Math.floor(R() * CAR_COLORS.length)])),
+    color: kind === 'tank' || kind === 'cannon' ? '#4d5a3c' : kind === 'heli' ? '#37414a' : kind === 'swatvan' ? '#22303c' : kind === 'fbi' ? '#101418' : kind === 'police' ? '#20375c' : (kind === 'taxi' ? '#e8b800' : (kind === 'bus' ? '#b05c2a' : CAR_COLORS[Math.floor(R() * CAR_COLORS.length)])),
     maxSpeed: k.maxSpeed * (0.92 + R() * 0.16), accel: k.accel,
     hp: k.hp, maxHp: k.hp, dead: false, burnT: 0, burn: 0,
     dir: 0, aiPause: 0, siren: 0, marked: false, parked: false, turned: false,
-    copsInside: kind === 'police' ? 2 : 0
+    copsInside: kind === 'swatvan' ? 4 : (kind === 'police' || kind === 'fbi') ? 2 : 0
   };
 }
 function makePed(x, y, cop) {
@@ -1057,7 +1059,7 @@ function spawnWorld() {
       peds.push(makePed(tx * TILE + TILE / 2, ty * TILE + TILE / 2));
     }
   }
-  const PICKS = ['health', 'money', 'pistol', 'mg', 'flame', 'rocket', 'armor', 'molotov', 'zap', 'dd', 'invis'];
+  const PICKS = ['health', 'money', 'pistol', 'mg', 'flame', 'rocket', 'armor', 'molotov', 'zap', 'dd', 'invis', 'bribe'];
   let pl = 0;
   for (let i = 0; i < 700 && pl < 26; i++) {
     const tx = 3 + Math.floor(R() * (MW - 6)), ty = 3 + Math.floor(R() * (MH - 6));
@@ -1245,45 +1247,106 @@ function addHeat(amount) {
 function recalcWanted() {
   player.wanted = player.heat >= 360 ? 6 : player.heat >= 300 ? 5 : player.heat >= 260 ? 4 : player.heat >= 140 ? 3 : player.heat >= 60 ? 2 : player.heat >= 15 ? 1 : 0;
 }
+let copsSee = false, lastSeenX = 0, lastSeenY = 0, roadblockCd = 0;
 function updateWanted(dt) {
-  if (gameT - player.lastCrimeT > 14) {
-    player.heat = Math.max(0, player.heat - dt * 7);
-    recalcWanted();
-  }
-  const wantCars = player.wanted === 0 ? 0 : player.wanted + Math.floor(level / 2);
-  let copCars = 0, copPeds = 0;
-  for (const c of cars) if (c.kind === 'police' && !c.dead && !c.parked) copCars++;
-  for (const p of peds) if (p.cop && !p.dead) copPeds++;
-  if (copCars < wantCars && R() < dt * 0.6) {
-    const s = randomRoadSpot();
-    if (s && dist2(s.x, s.y, player.x, player.y) > 450 * 450) {
-      const c = makeCar(s.x, s.y, DIR_ANG[s.dir], 'police');
-      c.dir = s.dir;
-      cars.push(c);
+  // GTA2: "треперещите глави" — знае ли полицията къде си?
+  copsSee = false;
+  if (player.wanted > 0 && player.invis <= 0 && !player.dead && !player.busted) {
+    const SR = 520 * 520;
+    for (const p of peds) if (p.cop && !p.dead && dist2(p.x, p.y, player.x, player.y) < SR) { copsSee = true; break; }
+    if (!copsSee) for (const c of cars) {
+      if (c.dead) continue;
+      if ((c.kind === 'police' || c.kind === 'swatvan' || c.kind === 'fbi' || c.army) &&
+          dist2(c.x, c.y, player.x, player.y) < SR) { copsSee = true; break; }
     }
   }
-  // Пеши полицаи при издирване ≥ 2
-  if (player.wanted >= 2 && copPeds < player.wanted * 2 && R() < dt * 0.4) {
-    const s = nearestSideTile(player.x + (R() - 0.5) * 900, player.y + (R() - 0.5) * 900, 500);
-    if (s && dist2(s.x, s.y, player.x, player.y) > 260 * 260) {
-      const cp = makePed(s.x, s.y, true);
-      if (player.wanted >= 5) { cp.swat = true; cp.hp = 90; cp.shirt = '#1d242b'; } // SWAT
+  if (copsSee) { lastSeenX = player.x; lastSeenY = player.y; }
+  // Виждат ли те — нивото не пада. Скриеш ли се — пада (на 1 глава изчезва бързо).
+  if (!copsSee && gameT - player.lastCrimeT > (player.wanted >= 2 ? 6 : 3)) {
+    player.heat = Math.max(0, player.heat - dt * (player.wanted >= 4 ? 6 : 10));
+    recalcWanted();
+  }
+  const W = player.wanted;
+  let policeCars = 0, swatVans = 0, fbiCars = 0, armyTanks = 0, copPeds = 0;
+  for (const c of cars) {
+    if (c.dead) continue;
+    if (c.army) armyTanks++;
+    else if (c.kind === 'police' && !c.parked) policeCars++;
+    else if (c.kind === 'swatvan') swatVans++;
+    else if (c.kind === 'fbi') fbiCars++;
+  }
+  for (const p of peds) if (p.cop && !p.dead) copPeds++;
+  // GTA2 таблица: 1 глава = една патрулка; 2-4 = две; 5 = FBI сменя полицията; 6 = армията сменя всички
+  const wantPolice = (W === 0 || W >= 5) ? 0 : W === 1 ? 1 : 2;
+  const wantSwat = W === 4 ? 2 : 0;
+  const wantFbi = W === 5 ? 3 : 0;
+  const wantArmy = W >= 6 ? 2 : 0;
+  const spawnChaser = (kind) => {
+    const sp = randomRoadSpot();
+    if (!sp || dist2(sp.x, sp.y, player.x, player.y) < 450 * 450) return null;
+    const c = makeCar(sp.x, sp.y, DIR_ANG[sp.dir], kind);
+    c.dir = sp.dir;
+    cars.push(c);
+    return c;
+  };
+  if (policeCars < wantPolice && R() < dt * 0.6) spawnChaser('police');
+  if (swatVans < wantSwat && R() < dt * 0.4) spawnChaser('swatvan');
+  if (fbiCars < wantFbi && R() < dt * 0.5) spawnChaser('fbi');
+  if (armyTanks < wantArmy && R() < dt * 0.3) {
+    const t2 = spawnChaser('tank');
+    if (t2) { t2.army = true; t2.turret = t2.angle; showMsg('АРМИЯТА Е НА УЛИЦАТА!', 2.5); }
+  }
+  // Пеши: полицаи от 2 глави, SWAT от 4, войници с узита на 6 (на 5 FBI рядко слизат)
+  const wantFoot = W >= 6 ? 6 : W === 5 ? 1 : W >= 2 ? W * 2 : 0;
+  if (copPeds < wantFoot && R() < dt * 0.4) {
+    const sp = nearestSideTile(player.x + (R() - 0.5) * 900, player.y + (R() - 0.5) * 900, 500);
+    if (sp && dist2(sp.x, sp.y, player.x, player.y) > 260 * 260) {
+      const cp = makePed(sp.x, sp.y, true);
+      if (W >= 6) { cp.soldier = true; cp.hp = 80; cp.shirt = '#3c4a2e'; }
+      else if (W >= 4) { cp.swat = true; cp.hp = 90; cp.shirt = '#1d242b'; }
       peds.push(cp);
     }
   }
-  // Армията при 6 звезди — танкове по петите ти
-  if (player.wanted >= 6) {
-    let armyTanks = 0;
-    for (const c of cars) if (c.army && !c.dead) armyTanks++;
-    if (armyTanks < 2 && R() < dt * 0.3) {
-      const s2 = randomRoadSpot();
-      if (s2 && dist2(s2.x, s2.y, player.x, player.y) > 600 * 600) {
-        const t2 = makeCar(s2.x, s2.y, DIR_ANG[s2.dir], 'tank');
-        t2.army = true; t2.turret = t2.angle; t2.dir = s2.dir;
-        cars.push(t2);
-        showMsg('АРМИЯТА Е НА УЛИЦАТА!', 2.5);
+  // Барикади: GTA2 ги вдига от 3 глави; на 6 барикадата е танк
+  roadblockCd -= dt;
+  if (W >= 3 && copsSee && roadblockCd <= 0 && player.invis <= 0) {
+    spawnRoadblock(W);
+    roadblockCd = 9;
+  }
+}
+function spawnRoadblock(W) {
+  const a = player.car ? player.car.angle : player.angle;
+  for (let i = 0; i < 24; i++) {
+    const d = 520 + R() * 300;
+    const sp = a + (R() - 0.5) * 0.9;
+    const wx = player.x + Math.cos(sp) * d, wy = player.y + Math.sin(sp) * d;
+    const tx = Math.floor(wx / TILE), ty = Math.floor(wy / TILE);
+    if (tileAt(tx, ty) !== T.ROAD) continue;
+    const dir = laneDirAt(tx, ty);
+    if (dir > 3) continue;
+    const cx = tx * TILE + TILE / 2, cy = ty * TILE + TILE / 2;
+    const across = DIR_ANG[dir] + Math.PI / 2;   // напречно на платното
+    if (W >= 6) {
+      const t2 = makeCar(cx, cy, across, 'tank');
+      t2.army = true; t2.sentry = true;
+      t2.turret = Math.atan2(player.y - cy, player.x - cx);
+      cars.push(t2);
+      showMsg('ТАНКОВА БАРИКАДА НАПРЕД!', 2);
+    } else {
+      for (const off of [-26, 26]) {
+        const pc = makeCar(cx + Math.cos(across) * off, cy + Math.sin(across) * off, across, W >= 5 ? 'fbi' : 'police');
+        pc.parked = true; pc.roadblock = true;
+        cars.push(pc);
       }
+      for (const off of [-20, 20]) {
+        const cp = makePed(cx + Math.cos(across) * off - Math.cos(a) * 26, cy + Math.sin(across) * off - Math.sin(a) * 26, true);
+        cp.hp = 60;                                        // бронирани (GTA2: barricade officers)
+        if (W >= 4) { cp.swat = true; cp.hp = 90; cp.shirt = '#1d242b'; }
+        peds.push(cp);
+      }
+      showMsg('🚧 Полицейска барикада напред!', 2);
     }
+    return;
   }
 }
 
@@ -1618,6 +1681,7 @@ function endMission(win) {
     missionsDone++;
     addScore(mission.reward, player.x, player.y - 20);
     let extra = '';
+    if (player.wanted > 0) { player.heat = 0; recalcWanted(); extra = ' · Ченгетата те забравиха'; }
     if (missionsDone % 2 === 0 && mult < 8) { mult++; extra = ' · Множител x' + mult; }
     showMsg('РАБОТАТА Е СВЪРШЕНА! +' + fmtMoney(mission.reward * mult) + extra, 4);
     AudioSys.pickup();
@@ -2048,6 +2112,7 @@ function updatePlayer(dt, inp) {
       else if (pk.type === 'zap') { player.ammo[6] += 30; showMsg('+Електрошок', 1); }
       else if (pk.type === 'dd') { player.dd = 30; showMsg('✖2 ДВОЙНИ ЩЕТИ — 30 сек!', 2.5); }
       else if (pk.type === 'invis') { player.invis = 20; showMsg('НЕВИДИМ ЗА ПОЛИЦИЯТА — 20 сек', 2.5); }
+      else if (pk.type === 'bribe') { player.heat = 0; recalcWanted(); showMsg('💵 Подкупът мина. Досието е чисто.', 2.5); }
       else taken = false;
       if (taken) { pickups.splice(i, 1); AudioSys.pickup(); }
     }
@@ -2215,7 +2280,25 @@ function updatePlayerCar(dt, inp, c) {
 
 // Армейски танк: гони играча и стреля със снаряди
 function updateArmyTank(c, dt) {
-  if (player.wanted < 5) { c.army = false; return; } // отбой — танкът е зарязан
+  if (player.wanted < 5) { c.army = false; c.sentry = false; return; } // отбой — танкът е зарязан
+  if (!copsSee) {                                        // изгубили са те — отиват на последната позиция
+    const dls = dist2(c.x, c.y, lastSeenX, lastSeenY);
+    if (dls < 200 * 200) { c.speed *= (1 - 1.5 * dt); return; }
+  }
+  if (c.sentry) {
+    const want2 = Math.atan2(player.y - c.y, player.x - c.x);
+    c.turret = want2;
+    c.shellT = (c.shellT === undefined ? 1.2 : c.shellT) - dt;
+    if (c.shellT <= 0 && copsSee && dist2(c.x, c.y, player.x, player.y) < 620 * 620 &&
+        player.invis <= 0 && !player.dead && !player.busted) {
+      c.shellT = 2.6;
+      const mx3 = c.x + Math.cos(want2) * (c.l / 2 + 16), my3 = c.y + Math.sin(want2) * (c.l / 2 + 16);
+      projectiles.push({ type: 'rocket', x: mx3, y: my3, vx: Math.cos(want2) * 520, vy: Math.sin(want2) * 520, life: 620 / 520, dmg: 40, police: true });
+      FX.sparks(mx3, my3);
+      AudioSys.rocket();
+    }
+    return;
+  }
   const dx = player.x - c.x, dy = player.y - c.y;
   const want = Math.atan2(dy, dx);
   let da = want - c.angle;
@@ -2262,7 +2345,7 @@ function updateCarAI(c, dt) {
   if (c.army && c !== player.car) { updateArmyTank(c, dt); return; }
   if (c === player.car || c.parked) return;
 
-  if (c.kind === 'police' && player.wanted > 0 && player.invis <= 0 && !player.dead && !player.busted) {
+  if ((c.kind === 'police' || c.kind === 'swatvan' || c.kind === 'fbi') && player.wanted > 0 && player.invis <= 0 && !player.dead && !player.busted) {
     updatePoliceCar(c, dt);
     return;
   }
@@ -2335,8 +2418,9 @@ function updateCarAI(c, dt) {
 }
 function updatePoliceCar(c, dt) {
   c.siren += dt * 8;
-  const px = player.car ? player.car.x : player.x;
-  const py = player.car ? player.car.y : player.y;
+  // GTA2: гонят те само ако те виждат; иначе отиват на последната позната позиция
+  const px = copsSee ? (player.car ? player.car.x : player.x) : lastSeenX;
+  const py = copsSee ? (player.car ? player.car.y : player.y) : lastSeenY;
   const ta = Math.atan2(py - c.y, px - c.x);
   c.angle += clamp(angDiff(c.angle, ta), -2.8 * dt, 2.8 * dt);
   const d = Math.sqrt(dist2(c.x, c.y, px, py));
@@ -2364,9 +2448,13 @@ function updatePoliceCar(c, dt) {
   if (c.copsInside > 0 && d < 180 && Math.abs(c.speed) < 50 && R() < dt * 1.5) {
     c.copsInside--;
     const cop = makePed(c.x + (R() - 0.5) * 20, c.y + (R() - 0.5) * 20, true);
+    if (c.kind === 'swatvan') { cop.swat = true; cop.hp = 90; cop.shirt = '#1d242b'; }
     peds.push(cop);
   }
-  if (player.wanted >= 3 && d < 320 && R() < dt * (0.5 + level * 0.15)) {
+  if (c.kind === 'fbi') {
+    // Агентите стрелят с картечници направо от колата, дори в движение
+    if (copsSee && d < 340 && R() < dt * 2.2) fireWeapon(c, ta + (R() - 0.5) * 0.12, 2, true);
+  } else if (player.wanted >= 3 && d < 320 && R() < dt * (0.5 + level * 0.15)) {
     fireWeapon(c, ta + (R() - 0.5) * 0.15, 1, true);
   }
 }
@@ -2444,8 +2532,8 @@ function updateCopPed(p, dt) {
   p.shootT -= dt;
   const vsHeli = player.car && player.car.kind === 'heli' && player.car.flying;
   if ((vsHeli ? player.wanted >= 1 && d < 430 : player.wanted >= 2 && d < 260) && d > 40 && p.shootT <= 0) {
-    p.shootT = (p.swat ? 0.55 : 1.2) - level * 0.08;
-    fireWeapon(p, ta + (R() - 0.5) * 0.12, p.swat ? 2 : 1, true);
+    p.shootT = ((p.swat || p.soldier) ? 0.55 : 1.2) - level * 0.08;
+    fireWeapon(p, ta + (R() - 0.5) * 0.12, (p.swat || p.soldier) ? 2 : 1, true);
   }
 }
 
@@ -2536,7 +2624,7 @@ function recycle(dt) {
     const c = cars[i];
     if (c === player.car || c.marked) continue;
     if (c.dead && c.burnT > 14) { cars.splice(i, 1); continue; }
-    if (!c.parked && dist2(c.x, c.y, player.x, player.y) > FAR) cars.splice(i, 1);
+    if ((!c.parked || c.roadblock) && dist2(c.x, c.y, player.x, player.y) > FAR) cars.splice(i, 1);
   }
   for (let i = peds.length - 1; i >= 0; i--) {
     const p = peds[i];
@@ -2547,7 +2635,7 @@ function recycle(dt) {
   let liveCars = 0, livePeds = 0;
   for (const c of cars) if (!c.dead && c.kind !== 'police') liveCars++;
   for (const p of peds) if (!p.dead && !p.cop) livePeds++;
-  if (liveCars < 36 && R() < dt * 3) {
+  if (liveCars < (player.wanted >= 6 ? 10 : 36) && R() < dt * 3) {
     const s = randomRoadSpot();
     if (s) {
       const d = dist2(s.x, s.y, player.x, player.y);
@@ -2560,7 +2648,7 @@ function recycle(dt) {
       }
     }
   }
-  if (livePeds < 48 && R() < dt * 4) {
+  if (player.wanted < 6 && livePeds < 48 && R() < dt * 4) {
     for (let i = 0; i < 20; i++) {
       const tx = 3 + Math.floor(R() * (MW - 6)), ty = 3 + Math.floor(R() * (MH - 6));
       const t = tileAt(tx, ty);
@@ -2985,7 +3073,7 @@ function drawPickups() {
     ctx.beginPath(); ctx.moveTo(-9, -9); ctx.lineTo(9, 9); ctx.moveTo(9, -9); ctx.lineTo(-9, 9); ctx.stroke();
     ctx.font = 'bold 11px sans-serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    const icons = { health: '➕', armor: '🛡', money: '💰', pistol: '🔫', mg: '🔫', flame: '🔥', rocket: '🚀', molotov: '🍾', zap: '⚡', dd: '✖', invis: '👁' };
+    const icons = { health: '➕', armor: '🛡', money: '💰', pistol: '🔫', mg: '🔫', flame: '🔥', rocket: '🚀', molotov: '🍾', zap: '⚡', dd: '✖', invis: '👁', bribe: '💵' };
     ctx.fillText(icons[pk.type] || '?', 0, 0);
     ctx.restore();
   }
@@ -4305,7 +4393,8 @@ function drawHUD() {
   const headR = 8;
   const headStep = Math.min(headR * 2.4, (mini.size - 16) / 5);
   for (let i = 0; i < 6; i++) {
-    drawPoliceHead(mini.x0 + 10 + i * headStep, mini.y0 + mini.size + 16, headR, i < player.wanted);
+    const shake = (copsSee && i < player.wanted) ? Math.sin(gameT * 26 + i * 1.7) * 1.8 : 0;
+    drawPoliceHead(mini.x0 + 10 + i * headStep, mini.y0 + mini.size + 16 + shake, headR, i < player.wanted);
   }
 
   // === Съобщения ===
