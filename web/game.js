@@ -518,7 +518,7 @@ let runLoaded = false, autoT = 12;
 function autosaveRun() {
   try {
     localStorage.setItem('gangcity_auto', JSON.stringify({
-      score, lives, level, mult, missionsDone, cityIdx, targetScore,
+      score, lives, level, mult, missionsDone, cityIdx, targetScore, doneMissions: doneMissions.slice(),
       ammo: player.ammo.slice(), weapon: player.weapon, respect: respect.slice()
     }));
   } catch (e) {}
@@ -531,6 +531,7 @@ function applyAutoRun() {
     lives = (sv.lives != null && sv.lives > 0) ? sv.lives : 4;
     level = sv.level || 1; mult = sv.mult || 1;
     missionsDone = sv.missionsDone || 0;
+    doneMissions = Array.isArray(sv.doneMissions) ? sv.doneMissions.slice() : [];
     if (sv.targetScore) targetScore = sv.targetScore;
     if (Array.isArray(sv.ammo)) player.ammo = sv.ammo.slice();
     if (sv.weapon != null) player.weapon = sv.weapon;
@@ -1906,28 +1907,23 @@ const mission = {
   checkpoints: [], timer: 0, reward: 0, cooldown: 3, wrecks: 0, wreckGoal: 0
 };
 function updatePhones(dt) {
-  let anyRinging = false;
-  for (const ph of phones) if (ph.ringing) anyRinging = true;
-  if (!mission.active && !anyRinging) {
-    mission.cooldown -= dt;
-    if (mission.cooldown <= 0 && !player.dead && !player.busted) {
-      // Звъни телефонът, най-близък до играча
-      let best = null, bd = 1e18;
-      for (const ph of phones) {
-        const d = dist2(ph.x, ph.y, player.x, player.y);
-        if (d < bd) { bd = d; best = ph; }
-      }
-      if (best) { best.ringing = true; showMsg('☎ Телефонът звъни! Отговори за работа.', 3); }
-    }
-  }
-  for (const ph of phones) {
-    if (!ph.ringing) continue;
+  if (!mission.active) mission.cooldown -= dt;
+  const ready = !mission.active && mission.cooldown <= 0 && !player.dead && !player.busted;
+  for (let i = 0; i < phones.length; i++) {
+    const ph = phones[i];
     const d = dist2(ph.x, ph.y, player.x, player.y);
-    if (d < 500 * 500 && R() < dt * 1.2) AudioSys.ring();
+    // GTA2: всеки телефон е отделна верига и звъни, когато си наблизо — ти избираш кой да вдигнеш
+    ph.ringing = ready && d < 420 * 420;
+    if (d > 600 * 600) ph.hinted = false;
+    if (!ph.ringing) continue;
+    if (!ph.hinted) { ph.hinted = true; showMsg('☎ ' + phonePreview(i), 3); }
+    if (R() < dt * 0.9) AudioSys.ring();
     if (!player.car && d < 26 * 26) {
-      ph.ringing = false;
+      for (const o of phones) o.ringing = false;
       mission.gangHint = gangAt(ph.x);
+      mission.phoneIdx = i;
       startMission();
+      return;
     }
   }
 }
@@ -1997,6 +1993,45 @@ const MISSION_TABLE = [
   { type: 'bomb',    txt: 'Централата на конкуренцията. Голям взрив, голяма история.', reward: 8000, timer: 100 },
   { type: 'survive', wanted: 4, goal: 60, txt: 'Шест глави са за легенди. Вдигни четири и оцелей минута.', reward: 9000, timer: 160 },
   { type: 'chase',   kind: 'swatvan', hp: 320, txt: 'Босът на другата банда бяга с брониран ван. Спри го. Това е краят на тяхната история.', reward: 12000, timer: 120 },
+  { type: 'hit',     goal: 2, txt: 'Двама свидетели, един следобед. И двамата.', reward: 5000, timer: 110 },
+  { type: 'deliver', kind: 'bus', txt: 'Автобус, пълен с "туристи" на конкуренцията. Открадни го и го докарай в гаража.', reward: 4000, timer: 130 },
+  { type: 'race',    goal: 7, txt: 'Уличната лига: 7 чекпойнта, без спирачки.', reward: 5000 },
+  { type: 'wreck',   goal: 3, kind: 'taxi', txt: 'Таксиметровата гилдия отказа да плаща. Три жълти коли на скрап.', reward: 4500, timer: 120 },
+  { type: 'crush',   goal: 3, txt: 'Пресата има нова поръчка: три коли до обяд.', reward: 4500, timer: 150 },
+  { type: 'bomb',    txt: 'Кафенето, където ченгетата закусват. Без жертви — просто послание.', reward: 5500, timer: 100 },
+  { type: 'chase',   kind: 'taxi', txt: 'Таксиджия видя твърде много. Настигни го, преди да стигне до участъка.', reward: 4500, timer: 90 },
+  { type: 'survive', wanted: 2, goal: 60, txt: 'Дръж ченгетата заети една минута, докато момчетата свършат работата.', reward: 5000, timer: 130 },
+  { type: 'gangkill', goal: 5, txt: 'Петима от тях, за да разберат кой командва.', reward: 5000, timer: 130 },
+  { type: 'deliver', kind: 'cabrio', txt: 'Шефката иска кабрио за плажа. Без покрив, без въпроси.', reward: 5000, timer: 130 },
+  { type: 'race',    goal: 4, stealth: true, txt: 'Четири срещи с информатори. Нито една звезда, иначе изчезват.', reward: 5500, timer: 180 },
+  { type: 'hit',     goal: 3, txt: 'Трима братя, три квартала. До полунощ.', reward: 7000, timer: 150 },
+  { type: 'wreck',   goal: 4, kind: 'police', txt: 'Четири патрулки. Ченгетата да разберат, че градът не е техен.', reward: 7000, timer: 140 },
+  { type: 'deliver', kind: 'swatvan', txt: 'SWAT ван — с него влизаме навсякъде. Открадни един и го докарай.', reward: 7000, timer: 140 },
+  { type: 'army',    goal: 7, txt: 'Танкова разходка: седем коли.', reward: 7500, timer: 120 },
+  { type: 'bomb',    txt: 'Оръжейният склад на конкуренцията. Взриви го и се измъкни жив.', reward: 7000, timer: 100 },
+  { type: 'chase',   kind: 'cavallo', hp: 140, txt: 'Крадец с нашето Кавало. Няма да го хванеш по права — притисни го в завоите.', reward: 7500, timer: 100 },
+  { type: 'fares',   goal: 6, txt: 'Шест курса с такси. Един от клиентите носи плик — не питай.', reward: 6000, timer: 200 },
+  { type: 'survive', wanted: 3, goal: 75, txt: 'Седемдесет и пет секунди на три звезди. За смелчаци.', reward: 7500, timer: 170 },
+  { type: 'deliver', txt: 'Кола с труп в багажника. Гаражът, бързо, преди да замирише.', reward: 6000, timer: 90 },
+  { type: 'hit',     txt: 'Ченге под прикритие в квартала. Разкрит е. Довърши го.', reward: 7500, timer: 90 },
+  { type: 'race',    goal: 8, txt: 'Големият кръг: 8 чекпойнта през целия град.', reward: 7000 },
+  { type: 'raid',    goal: 10, txt: 'Хеликоптерът пак е наш. Десет коли от въздуха.', reward: 10000, timer: 110 },
+  { type: 'crush',   goal: 5, txt: 'Пет коли в пресата за три минути. Собственикът ще ни е длъжник.', reward: 7000, timer: 180 },
+  { type: 'gangkill', goal: 8, txt: 'Война. Осем от тях.', reward: 8000, timer: 150 },
+  { type: 'deliver', kind: 'tank', txt: 'Шефът иска ТАНК в гаража. Не питай откъде — потърси наоколо.', reward: 10000, timer: 200 },
+  { type: 'chase',   kind: 'fbi', static: true, txt: 'Колата на FBI пред участъка. Разбий я, докато е паркирана, и се махни.', reward: 6000, timer: 100 },
+  { type: 'bomb',    txt: 'Бензиностанцията на конкуренцията. Взривът ще се види от целия град.', reward: 8500, timer: 100 },
+  { type: 'survive', wanted: 5, goal: 45, txt: 'Пет звезди — SWAT и FBI. Четиридесет и пет секунди.', reward: 10000, timer: 150 },
+  { type: 'hit',     goal: 4, txt: 'Четирима съдебни заседатели. Процесът трябва да пропадне.', reward: 9000, timer: 180 },
+  { type: 'wreck',   goal: 8, txt: 'Осем коли. Шоуто трябва да е незабравимо.', reward: 8000, timer: 150 },
+  { type: 'deliver', kind: 'heli', txt: 'Хеликоптерът от покрива. Докарай го в гаража — кацни до вратата.', reward: 12000, timer: 150 },
+  { type: 'race',    goal: 5, stealth: true, txt: 'Пет адреса, тихо като сянка.', reward: 7500, timer: 200 },
+  { type: 'chase',   kind: 'volta', txt: 'Тиха кола, тих беглец. Няма да го чуеш — следвай маркера.', reward: 7500, timer: 100 },
+  { type: 'fares',   goal: 8, txt: 'Осем курса за четири минути. Рекордът на гилдията.', reward: 8000, timer: 240 },
+  { type: 'army',    goal: 10, txt: 'Десет коли с армейска техника. Легендата за танкиста.', reward: 11000, timer: 140 },
+  { type: 'gangkill', goal: 10, txt: 'Десет. Това е последната им война.', reward: 10000, timer: 180 },
+  { type: 'survive', wanted: 6, goal: 60, txt: 'Шест глави. Армията. Една минута. Оцелееш ли, си Кръстник.', reward: 15000, timer: 180 },
+  { type: 'chase',   kind: 'tank', hp: 900, txt: 'Дезертьор с танк бяга през града. Спри го с каквото имаш.', reward: 15000, timer: 160 },
 ];
 function spawnMissionCar(kind, minD, maxD) {
   for (let i = 0; i < 80; i++) {
@@ -2037,15 +2072,13 @@ function setupMission(m) {
     return true;
   }
   if (m.type === 'hit') {
-    let ped = null, bd = 1e18;
-    for (const p of peds) {
-      if (p.dead || p.cop) continue;
-      const d = dist2(p.x, p.y, player.x, player.y);
-      if (d > 400 * 400 && d < bd) { bd = d; ped = p; }
-    }
-    if (!ped) return false;
-    ped.markTarget = true;
-    mission.target = ped;
+    const want = m.goal || 1;
+    const cands = peds.filter(p => !p.dead && !p.cop && dist2(p.x, p.y, player.x, player.y) > 300 * 300);
+    if (cands.length < want) return false;
+    cands.sort(() => R() - 0.5);
+    mission.targets = cands.slice(0, want);
+    for (const p of mission.targets) p.markTarget = true;
+    mission.target = mission.targets[0];
     return true;
   }
   if (m.type === 'race') {
@@ -2084,16 +2117,35 @@ function setupMission(m) {
   if (m.type === 'chase') {
     const c = spawnMissionCar(m.kind || 'sport', 500, 900);
     if (!c) return false;
-    c.parked = false; c.flee = true;
+    c.parked = !!m.static; c.flee = !m.static;
     if (m.hp) { c.hp = m.hp; c.maxHp = m.hp; }
     mission.target = c;
     return true;
   }
   return true;   // wreck, fares, crush, survive — нямат подготовка
 }
+let doneMissions = [];
+// Веригата на телефон №pi: мисиите с индекс ≡ pi (mod брой телефони). Дава първата недовършена,
+// а свърши ли веригата — произволна от нея с бонус за нов кръг.
+function chainNext(pi) {
+  const nPh = Math.max(1, phones.length);
+  const chain = [];
+  for (let i = pi % nPh; i < MISSION_TABLE.length; i += nPh) chain.push(i);
+  if (!chain.length) chain.push(pi % MISSION_TABLE.length);
+  const undone = chain.filter(i => !doneMissions.includes(i));
+  if (undone.length) return { idx: undone[0], cycle: 0 };
+  return { idx: chain[Math.floor(R() * chain.length)], cycle: 1 + Math.floor(doneMissions.length / MISSION_TABLE.length) };
+}
+const MISSION_LABELS = { deliver: 'кражба', hit: 'удар', race: 'гонка', wreck: 'разбиване', fares: 'такси', crush: 'преса',
+  gangkill: 'банди', bomb: 'бомба', chase: 'преследване', survive: 'оцеляване', army: 'танкове', raid: 'хеликоптер' };
+function phonePreview(pi) {
+  const pk = chainNext(pi), m = MISSION_TABLE[pk.idx];
+  return 'Мисия ' + (pk.idx + 1) + ' · ' + (m.stealth ? 'разузнаване' : MISSION_LABELS[m.type] || m.type) + ' · ' + fmtMoney(m.reward);
+}
 function startMission() {
-  const idx = missionsDone % MISSION_TABLE.length;
-  const cycle = Math.floor(missionsDone / MISSION_TABLE.length);
+  const pick = chainNext(mission.phoneIdx || 0);
+  const idx = pick.idx, cycle = pick.cycle;
+  mission.tableIdx = idx;
   const m = MISSION_TABLE[idx];
   mission.type = m.type; mission.text = m.txt;
   mission.reward = Math.floor(m.reward * (1 + cycle * 0.25));
@@ -2117,10 +2169,12 @@ function startMission() {
 }
 function endMission(win) {
   if (mission.type === 'deliver' && mission.target) mission.target.marked = false;
-  if (mission.type === 'hit' && mission.target) mission.target.markTarget = false;
+  if (mission.type === 'hit') for (const p of (mission.targets || [mission.target])) if (p) p.markTarget = false;
+  mission.targets = null;
   if (mission.type === 'chase' && mission.target) { mission.target.flee = false; mission.target.marked = false; }
   if (win) {
     missionsDone++;
+    if (mission.tableIdx != null && !doneMissions.includes(mission.tableIdx)) doneMissions.push(mission.tableIdx);
     meta.metaMissions++;
     { const nl = CITY_REQ.findIndex((r, i) => i > 0 && r === meta.metaMissions); if (nl > 0) openUnlockScreen(nl, 'offer'); }
     addRankXp(15);
@@ -2197,7 +2251,11 @@ function updateMission(dt) {
       endMission(true);
     }
   } else if (mission.type === 'hit') {
-    if (mission.target.dead) endMission(true);
+    const alive = (mission.targets || [mission.target]).filter(p => !p.dead);
+    if (!alive.length) { endMission(true); return; }
+    let best = alive[0], bd = 1e18;                     // маркерът сочи най-близката жива цел
+    for (const p of alive) { const d = dist2(p.x, p.y, player.x, player.y); if (d < bd) { bd = d; best = p; } }
+    mission.target = best;
   } else if (mission.type === 'chase') {
     if (mission.target.dead) endMission(true);
   } else if (mission.type === 'survive') {
@@ -3320,7 +3378,7 @@ function switchCity(target) {
 }
 function restartGame() {
   score = 0; mult = 1; lives = 4; level = 1;
-  targetScore = 60000; missionsDone = 0;
+  targetScore = 60000; missionsDone = 0; doneMissions = [];
   gameOver = false; citySwitchPending = false;
   player.hp = 100; player.armor = 0; player.dead = false; player.busted = false;
   player.car = null; player.onTrain = null;
