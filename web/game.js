@@ -256,6 +256,101 @@ window.onAdReward = function (hook) {
     showMsg('Оръжията ще те чакат след болницата.', 2.5);
   }
 };
+
+/* ---------------- Постоянен прогрес (мета) ---------------- */
+const CITY_REQ = [0, 4, 8, 12, 16];   // мисии за отключване на всеки град
+const RANKS = [
+  { xp: 0, name: 'Хлапе' }, { xp: 30, name: 'Джебчия' }, { xp: 80, name: 'Боец' },
+  { xp: 160, name: 'Дясна ръка' }, { xp: 300, name: 'Бос' }, { xp: 500, name: 'Кръстник' },
+];
+const DAILY_TASKS = [
+  { id: 'crush', txt: 'Смачкай 3 коли в пресата', goal: 3 },
+  { id: 'taxi', txt: 'Изкарай $600 с такси', goal: 600 },
+  { id: 'wreck', txt: 'Унищожи 8 коли', goal: 8 },
+  { id: 'missions', txt: 'Завърши 2 мисии', goal: 2 },
+];
+const meta = {
+  metaMissions: 0, collection: [], rankXp: 0,
+  daily: { date: '', taskIdx: 0, progress: 0, done: false, streak: 0, lastDoneDate: '' }
+};
+try { Object.assign(meta, JSON.parse(localStorage.getItem('gangcity_meta') || '{}')); } catch (e) {}
+function saveMeta() { try { localStorage.setItem('gangcity_meta', JSON.stringify(meta)); } catch (e) {} }
+function cityUnlocked(i) { return meta.metaMissions >= (CITY_REQ[i] || 0); }
+function rankOf(xp) { let r = RANKS[0]; for (const q of RANKS) if (xp >= q.xp) r = q; return r; }
+function addRankXp(n) {
+  const before = rankOf(meta.rankXp).name;
+  meta.rankXp += n;
+  const after = rankOf(meta.rankXp);
+  if (after.name !== before) { showMsg('⭐ НОВ РАНГ: ' + after.name.toUpperCase() + '!', 4); AudioSys.gouranga(); }
+  saveMeta();
+}
+function dailyKey(off) {
+  const d = new Date(Date.now() - (off || 0));
+  return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+}
+function ensureDaily() {
+  const k = dailyKey(0);
+  if (meta.daily.date !== k) {
+    const seed = k.split('-').reduce((a, b) => a * 31 + (+b), 7);
+    meta.daily.date = k;
+    meta.daily.taskIdx = seed % DAILY_TASKS.length;
+    meta.daily.progress = 0;
+    meta.daily.done = false;
+    saveMeta();
+  }
+}
+function dailyProgress(id, amt) {
+  ensureDaily();
+  const t = DAILY_TASKS[meta.daily.taskIdx];
+  if (meta.daily.done || t.id !== id) return;
+  meta.daily.progress += amt;
+  if (meta.daily.progress >= t.goal) {
+    meta.daily.done = true;
+    meta.daily.streak = (meta.daily.lastDoneDate === dailyKey(864e5)) ? (meta.daily.streak || 0) + 1 : 1;
+    meta.daily.lastDoneDate = meta.daily.date;
+    const rew = meta.daily.streak >= 5 ? 3000 : 1500;
+    addScore(rew, player.x, player.y - 24);
+    addRankXp(10);
+    showMsg('📅 Дневна задача изпълнена! +' + fmtMoney(rew) +
+      (meta.daily.streak > 1 ? ' · Серия: ' + meta.daily.streak + ' дни' : ''), 4);
+  } else {
+    showMsg('📅 ' + t.txt + ' — ' + Math.min(meta.daily.progress, t.goal) + '/' + t.goal, 1.6);
+  }
+  saveMeta();
+}
+function collectCar(kind) {
+  if (meta.collection.includes(kind)) return;
+  meta.collection.push(kind);
+  addRankXp(5);
+  showMsg('🚗 Нов модел в колекцията: ' + (CAR_KINDS[kind] ? CAR_KINDS[kind].name : kind) +
+    ' (' + meta.collection.length + '/' + Object.keys(CAR_KINDS).length + ')', 3);
+  saveMeta();
+}
+/* ---------------- Тих авто-запис на текущата игра ---------------- */
+let runLoaded = false, autoT = 12;
+function autosaveRun() {
+  try {
+    localStorage.setItem('gangcity_auto', JSON.stringify({
+      score, lives, level, mult, missionsDone, cityIdx, targetScore,
+      ammo: player.ammo.slice(), weapon: player.weapon, respect: respect.slice()
+    }));
+  } catch (e) {}
+}
+function applyAutoRun() {
+  try {
+    const sv = JSON.parse(localStorage.getItem('gangcity_auto') || localStorage.getItem('gangcity_save') || 'null');
+    if (!sv) return null;
+    score = sv.score || 0;
+    lives = (sv.lives != null && sv.lives > 0) ? sv.lives : 4;
+    level = sv.level || 1; mult = sv.mult || 1;
+    missionsDone = sv.missionsDone || 0;
+    if (sv.targetScore) targetScore = sv.targetScore;
+    if (Array.isArray(sv.ammo)) player.ammo = sv.ammo.slice();
+    if (sv.weapon != null) player.weapon = sv.weapon;
+    if (Array.isArray(sv.respect)) { respect[0] = sv.respect[0] || 0; respect[1] = sv.respect[1] || 0; }
+    return sv.cityIdx || 0;
+  } catch (e) { return null; }
+}
 const phones = [];
 const frenzySpots = [];
 const miniCanvas = document.createElement('canvas');
@@ -1045,6 +1140,11 @@ let camX = 0, camY = 0, camZoom = 1;
 let gameT = 0, paused = false, started = false;
 let startCityButtons = [];   // зони за избор на град на стартовия екран
 function startWithCity(i) {
+  if (!cityUnlocked(i)) return;
+  if (!runLoaded) {
+    runLoaded = true;
+    if (applyAutoRun() !== null) showMsg('Продължаваш от последния запис.', 2.5);
+  }
   if (i !== cityIdx) {
     genCityMap(i);
     playerToStart();
@@ -1744,6 +1844,10 @@ function endMission(win) {
   if (mission.type === 'hit' && mission.target) mission.target.markTarget = false;
   if (win) {
     missionsDone++;
+    meta.metaMissions++;
+    addRankXp(15);
+    dailyProgress('missions', 1);
+    autosaveRun();
     addScore(mission.reward, player.x, player.y - 20);
     let extra = '';
     if (player.wanted > 0) { player.heat = 0; recalcWanted(); extra = ' · Ченгетата те забравиха'; }
@@ -1834,6 +1938,7 @@ const _origDamageCar = damageCar;
 damageCar = function (c, dmg, byPlayer, cause) {
   const wasDead = c.dead;
   _origDamageCar(c, dmg, byPlayer, cause);
+  if (!wasDead && c.dead && byPlayer) dailyProgress('wreck', 1);
   if (!wasDead && c.dead && byPlayer && mission.active && !c.gear && (mission.type === 'wreck' || mission.type === 'army' || mission.type === 'raid')) {
     mission.wrecks++;
     showMsg('Унищожени: ' + mission.wrecks + '/' + mission.wreckGoal, 2);
@@ -1995,6 +2100,7 @@ function tryEnterCar() {
     else if (!wasParked) addHeat(8);
     addScore(10, best.x, best.y);
     showMsg('Открадна: ' + best.name, 1.6);
+    collectCar(best.kind);
   }
 }
 function exitCar() {
@@ -2024,19 +2130,21 @@ function updateCrusher(dt) {
   FX.sparks(c.x, c.y); FX.glass(c.x, c.y); AudioSys.hit();
   addScore(pay, c.x, c.y);
   showMsg('🗜 Пресата я глътна. +' + fmtMoney(pay), 2.5);
+  dailyProgress('crush', 1);
+  addRankXp(1);
   crusherCd = 3;
 }
 function updateChurch(dt) {
   churchCd -= dt;
   if (player.car || churchCd > 0) return;
   if (dist2(player.x, player.y, churchDoor.x, churchDoor.y) > 45 * 45) return;
-  if (score < 2000) { showMsg('✝ "Спасението иска дарение от $2,000, чадо."', 2.5); churchCd = 5; return; }
+  if (score < 2000) { showMsg('✝ "Благословията иска дарение от $2,000, чадо."', 2.5); churchCd = 5; return; }
   score -= 2000;
-  const sv = { score, lives, level, mult, missionsDone, cityIdx, ammo: player.ammo.slice(), weapon: player.weapon };
-  if (typeof respect !== 'undefined') sv.respect = respect.slice();
-  try { localStorage.setItem('gangcity_save', JSON.stringify(sv)); } catch (e) {}
+  player.hp = 100; player.armor = 100;
+  player.heat = 0; recalcWanted();
+  autosaveRun();
   AudioSys.pickup();
-  showMsg('✝ Спасен си, синко. Прогресът е записан. -$2,000', 3);
+  showMsg('✝ Благословен си: здраве, броня, чисто досие. Прогресът е записан. -$2,000', 3);
   churchCd = 8;
 }
 function updateTaxi(dt) {
@@ -2076,6 +2184,8 @@ function updateTaxi(dt) {
       addScore(taxiJob.pay, player.car.x, player.car.y);
       AudioSys.pickup();
       showMsg('🚕 Доволен клиент! Огледай се за следващия.', 2);
+      dailyProgress('taxi', taxiJob.pay);
+      addRankXp(1);
       taxiJob.dest = null;
     }
   }
@@ -2852,20 +2962,9 @@ function restartGame() {
   taxiJob.fare = null; taxiJob.dest = null;
   mission.active = false; mission.target = null; mission.checkpoints = [];
   mission.cooldown = 3;
-  let city = 0;
-  try {
-    const sv = JSON.parse(localStorage.getItem('gangcity_save') || 'null');
-    if (sv) {                                        // ✝ продължаваме от спасението
-      score = sv.score || 0; lives = sv.lives != null ? sv.lives : 4;
-      level = sv.level || 1; mult = sv.mult || 1;
-      missionsDone = sv.missionsDone || 0;
-      if (Array.isArray(sv.ammo)) player.ammo = sv.ammo.slice();
-      if (sv.weapon) player.weapon = sv.weapon;
-      if (typeof respect !== 'undefined' && Array.isArray(sv.respect)) { respect[0] = sv.respect[0] || 0; respect[1] = sv.respect[1] || 0; }
-      city = sv.cityIdx || 0;
-      showMsg('✝ Продължаваш от последното спасение.', 3);
-    }
-  } catch (e) {}
+  const savedCity = applyAutoRun();
+  let city = (savedCity !== null && cityUnlocked(savedCity)) ? savedCity : 0;
+  if (savedCity !== null) showMsg('Продължаваш от последния запис.', 3);
   genCityMap(city);
   playerToStart();
   spawnWorld();
@@ -4635,7 +4734,8 @@ function drawStartScreen() {
   startCityButtons = [];
   ctx.font = 'bold 15px sans-serif';
   const bh = 30, gap = 10;
-  const widths = THEMES.map(t => ctx.measureText((THEMES.indexOf(t) + 1) + '. ' + t.name).width + 20);
+  const labels = THEMES.map((t, i) => cityUnlocked(i) ? (i + 1) + '. ' + t.name : '🔒 ' + t.name);
+  const widths = labels.map(l => ctx.measureText(l).width + 20);
   // Разпредели в редове, които се събират на екрана
   const rows = [[]];
   let rowW = 0;
@@ -4655,8 +4755,8 @@ function drawStartScreen() {
       ctx.strokeStyle = sel ? '#7ab6ff' : 'rgba(255,255,255,0.3)';
       ctx.lineWidth = sel ? 2 : 1;
       ctx.strokeRect(bx, by, widths[i], bh);
-      ctx.fillStyle = sel ? '#cfe4ff' : '#ccc';
-      ctx.fillText((i + 1) + '. ' + THEMES[i].name, bx + widths[i] / 2, by + bh / 2);
+      ctx.fillStyle = !cityUnlocked(i) ? '#666' : sel ? '#cfe4ff' : '#ccc';
+      ctx.fillText(labels[i], bx + widths[i] / 2, by + bh / 2);
       startCityButtons.push({ x: bx, y: by, w: widths[i], h: bh, idx: i });
       bx += widths[i] + gap;
     }
@@ -4693,6 +4793,24 @@ function drawStartScreen() {
     ctx.fillStyle = '#7ee08a';
     ctx.fillText('Рекорд: ' + fmtMoney(scoreBest), VW / 2, VH * 0.5 + lines.length * 22 + 16);
   }
+  // Постоянният прогрес: ранг, колекция, дневна задача, следващо отключване
+  ensureDaily();
+  let py = VH * 0.5 + lines.length * 22 + 40;
+  ctx.font = 'bold 14px sans-serif';
+  ctx.fillStyle = '#ffd23c';
+  ctx.fillText('⭐ Ранг: ' + rankOf(meta.rankXp).name + ' (' + meta.rankXp + ' т.)', VW / 2, py); py += 21;
+  ctx.font = '13px sans-serif';
+  ctx.fillStyle = '#9fc4d8';
+  ctx.fillText('🚗 Колекция: ' + meta.collection.length + '/' + Object.keys(CAR_KINDS).length + ' модела', VW / 2, py); py += 20;
+  const dTask = DAILY_TASKS[meta.daily.taskIdx];
+  ctx.fillStyle = meta.daily.done ? '#7ee08a' : '#e8b800';
+  ctx.fillText('📅 Днес: ' + (meta.daily.done ? 'изпълнена ✓' : dTask.txt) +
+    (meta.daily.streak > 1 ? ' · серия ' + meta.daily.streak + ' дни' : ''), VW / 2, py); py += 20;
+  const nextLock = THEMES.findIndex((t, i) => !cityUnlocked(i));
+  if (nextLock >= 0) {
+    ctx.fillStyle = '#b09040';
+    ctx.fillText('🔒 ' + THEMES[nextLock].name + ': още ' + (CITY_REQ[nextLock] - meta.metaMissions) + ' мисии', VW / 2, py);
+  }
   ctx.textBaseline = 'top';
 }
 
@@ -4715,6 +4833,9 @@ function frame(now) {
       levelCompleteT -= dt;
       if (citySwitchPending && levelCompleteT <= 0) {
         citySwitchPending = false;
+        const nextIdx = (cityIdx + 1) % THEMES.length;
+        meta.metaMissions = Math.max(meta.metaMissions, CITY_REQ[nextIdx] || 0);
+        saveMeta();
         switchCity();
       }
     }
@@ -4735,6 +4856,8 @@ function frame(now) {
     updateChurch(dt);
     updateTaxi(dt);
     AdBridge.update();
+    autoT -= dt;
+    if (autoT <= 0) { autoT = 12; if (started && !gameOver && !player.dead) autosaveRun(); }
     {
       const z = gangAt(player.x);
       if (z !== gangZoneLast && gameT - (window._zoneMsgT || -99) > 6) {
