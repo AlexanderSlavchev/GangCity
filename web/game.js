@@ -1960,68 +1960,151 @@ function spawnGear(kind) {
   }
   return null;
 }
-function startMission() {
-  const roll = missionsDone % 6;
-  if (roll === 0) {
-    let car = null, bd = 1e18;
-    for (const c of cars) {
-      if (c.dead || c.kind === 'police' || c === player.car) continue;
-      const d = dist2(c.x, c.y, player.x, player.y);
-      if (d > 300 * 300 && d < bd) { bd = d; car = c; }
+const MISSION_TABLE = [
+  { type: 'deliver', txt: 'Първа работа: шефът иска кола. Открадни я и я закарай в гаража.', reward: 2500, timer: 120 },
+  { type: 'hit',     txt: 'Един бърборко говори с ченгетата. Накарай го да замълчи.', reward: 2500, timer: 90 },
+  { type: 'race',    goal: 5, txt: 'Докажи, че си бърз — мини чекпойнтите преди да изтече времето.', reward: 3000 },
+  { type: 'wreck',   goal: 3, txt: 'Конкуренцията ни дразни. Разбий 3 от колите им.', reward: 3000, timer: 100 },
+  { type: 'deliver', kind: 'taxi', txt: 'Трябва ни такси за една маскировка. Докарай едно в гаража.', reward: 3000, timer: 110 },
+  { type: 'fares',   goal: 3, txt: 'Слуховете се разнасят с таксита. Вземи едно, направи 3 курса и слушай.', reward: 3200, timer: 150 },
+  { type: 'crush',   goal: 2, txt: 'Уликите трябва да изчезнат. Смачкай 2 коли в пресата.', reward: 3000, timer: 120 },
+  { type: 'gangkill', goal: 4, txt: 'Онези с цветните ризи ни дишат във врата. Свали 4 от тях в квартала им.', reward: 3500, timer: 120 },
+  { type: 'bomb',    txt: 'Пакетче за един счетоводител. Занеси го на адреса, въоръжи го и изчезвай.', reward: 4000, timer: 110 },
+  { type: 'race',    goal: 3, stealth: true, txt: 'Огледай 3 адреса, тихо. Ако ченгетата те надушат — работата се отменя.', reward: 3500, timer: 150 },
+  { type: 'chase',   kind: 'sport', txt: 'Един курир избяга с нашите пари. Настигни го и го спри — завинаги.', reward: 4000, timer: 100 },
+  { type: 'wreck',   goal: 2, kind: 'police', txt: 'Две патрулки паркират пред гаража всяка вечер. Да не паркират повече.', reward: 4500, timer: 110 },
+  { type: 'deliver', kind: 'sport', txt: 'Шефът иска нещо бързо за уикенда. Спортна кола, в гаража, без драскотина.', reward: 3500, timer: 110 },
+  { type: 'survive', wanted: 2, goal: 45, txt: 'Отвлечи вниманието: вдигни 2 звезди и издържи 45 секунди без арест.', reward: 4000, timer: 120 },
+  { type: 'army',    goal: 6, txt: 'Армията "забрави" техника из града. Вземи танк или оръдие и разбий 6 коли!', reward: 6000, timer: 110 },
+  { type: 'hit',     txt: 'Съдия с прекалено дълга памет. Скъси я.', reward: 4500, timer: 80 },
+  { type: 'race',    goal: 6, txt: 'Обзалагане с една от бандите: 6 чекпойнта срещу часовника.', reward: 4500 },
+  { type: 'fares',   goal: 5, txt: 'Пет курса с такси за три минути. Гилдията ще ни дължи услуга.', reward: 4500, timer: 180 },
+  { type: 'crush',   goal: 3, txt: 'Три горещи коли, три улики. Пресата ги чака.', reward: 4000, timer: 140 },
+  { type: 'bomb',    txt: 'Складът на конкуренцията. Взриви го и не се оглеждай назад.', reward: 5500, timer: 110 },
+  { type: 'deliver', kind: 'volta', txt: 'Тиха кола за тиха работа. Докарай Волта в гаража.', reward: 5000, timer: 130 },
+  { type: 'gangkill', goal: 6, txt: 'Отговор на нападението им: шестима от техните, в техния квартал.', reward: 5000, timer: 130 },
+  { type: 'raid',    goal: 8, txt: 'Отгоре градът е стрелбище. Вземи хеликоптера и бомбардирай 8 коли! Ще стрелят по теб.', reward: 8000, timer: 95 },
+  { type: 'chase',   kind: 'toro', txt: 'Предател с нашия списък бяга с Торо. Спри го, преди да стигне до участъка.', reward: 5500, timer: 90 },
+  { type: 'race',    goal: 4, stealth: true, txt: 'Четири адреса. Нито една звезда. Разбра ли?', reward: 5000, timer: 170 },
+  { type: 'wreck',   goal: 6, txt: 'Показна сила: 6 коли за две минути.', reward: 5500, timer: 120 },
+  { type: 'survive', wanted: 3, goal: 60, txt: 'Ченгетата трябва да са заети другаде. Вдигни 3 звезди и издържи цяла минута.', reward: 6000, timer: 150 },
+  { type: 'deliver', kind: 'police', txt: 'Трябва ни патрулка. Открадни една и я докарай в гаража — без да ти стрелят в гърба.', reward: 6000, timer: 120 },
+  { type: 'deliver', txt: 'Кола с нещо в багажника. Не питай — карай в гаража.', reward: 5000, timer: 100 },
+  { type: 'hit',     txt: 'Един от босовете пие кафе на площада. Последното.', reward: 7000, timer: 90 },
+  { type: 'crush',   goal: 4, txt: 'Четири коли, четири трупа улики. Пресата не задава въпроси.', reward: 5500, timer: 160 },
+  { type: 'army',    goal: 8, txt: 'Армията пак забрави техника. Осем коли този път — покажи им.', reward: 8000, timer: 120 },
+  { type: 'deliver', kind: 'cavallo', txt: 'Само едно Кавало в града. Направи го наше.', reward: 7500, timer: 150 },
+  { type: 'bomb',    txt: 'Централата на конкуренцията. Голям взрив, голяма история.', reward: 8000, timer: 100 },
+  { type: 'survive', wanted: 4, goal: 60, txt: 'Шест глави са за легенди. Вдигни четири и оцелей минута.', reward: 9000, timer: 160 },
+  { type: 'chase',   kind: 'swatvan', hp: 320, txt: 'Босът на другата банда бяга с брониран ван. Спри го. Това е краят на тяхната история.', reward: 12000, timer: 120 },
+];
+function spawnMissionCar(kind, minD, maxD) {
+  for (let i = 0; i < 80; i++) {
+    const sp = randomRoadSpot();
+    if (!sp) continue;
+    const d = dist2(sp.x, sp.y, player.x, player.y);
+    if (d < minD * minD || d > maxD * maxD) continue;
+    const c = makeCar(sp.x, sp.y, DIR_ANG[sp.dir] || 0, kind);
+    c.dir = sp.dir; c.parked = true; c.marked = true;
+    cars.push(c);
+    return c;
+  }
+  return null;
+}
+function setupMission(m) {
+  if (m.type === 'deliver') {
+    let car = null;
+    if (m.kind) {
+      let bd = 1e18;
+      for (const c of cars) {
+        if (c.dead || c.kind !== m.kind || c === player.car) continue;
+        const d = dist2(c.x, c.y, player.x, player.y);
+        if (d > 250 * 250 && d < bd) { bd = d; car = c; }
+      }
+      if (!car) car = spawnMissionCar(m.kind, 400, 1500);
+    } else {
+      let bd = 1e18;
+      for (const c of cars) {
+        if (c.dead || c.kind === 'police' || c.army || c.gear || c === player.car) continue;
+        const d = dist2(c.x, c.y, player.x, player.y);
+        if (d > 300 * 300 && d < bd) { bd = d; car = c; }
+      }
     }
     const drop = randomSideSpotPx(900);
-    if (!car || !drop) { mission.cooldown = 3; return; }
+    if (!car || !drop) return false;
     car.marked = true;
-    mission.active = true; mission.type = 'deliver';
     mission.target = car; mission.drop = drop;
-    mission.reward = 3000; mission.timer = 120;
-    mission.text = 'Шефът иска тази кола. Открадни я и я закарай в гаража!';
-  } else if (roll === 1) {
+    return true;
+  }
+  if (m.type === 'hit') {
     let ped = null, bd = 1e18;
     for (const p of peds) {
       if (p.dead || p.cop) continue;
       const d = dist2(p.x, p.y, player.x, player.y);
       if (d > 400 * 400 && d < bd) { bd = d; ped = p; }
     }
-    if (!ped) { mission.cooldown = 3; return; }
+    if (!ped) return false;
     ped.markTarget = true;
-    mission.active = true; mission.type = 'hit';
     mission.target = ped;
-    mission.reward = 2500; mission.timer = 90;
-    mission.text = 'Този тип говори с ченгетата. Погрижи се за него!';
-  } else if (roll === 2) {
-    mission.checkpoints = [];
-    for (let i = 0; i < 5; i++) {
-      const s = randomRoadSpot();
-      if (s) mission.checkpoints.push({ x: s.x, y: s.y });
-    }
-    if (mission.checkpoints.length < 3) { mission.cooldown = 3; return; }
-    mission.active = true; mission.type = 'race';
-    mission.reward = 3500;
-    mission.timer = 20 + mission.checkpoints.length * 13;
-    mission.text = 'Докажи, че си бърз — мини през всички чекпойнти!';
-  } else if (roll === 3) {
-    mission.active = true; mission.type = 'wreck';
-    mission.wrecks = 0; mission.wreckGoal = 3;
-    mission.reward = 3000; mission.timer = 100;
-    mission.text = 'Конкуренцията ни дразни. Унищожи ' + mission.wreckGoal + ' коли!';
-  } else if (roll === 4) {
-    const gear = [spawnGear('tank'), spawnGear('tank'), spawnGear('cannon'), spawnGear('cannon')].filter(Boolean);
-    if (!gear.length) { mission.cooldown = 3; return; }
-    mission.gear = gear;
-    mission.active = true; mission.type = 'army';
-    mission.wrecks = 0; mission.wreckGoal = 6;
-    mission.reward = 6000; mission.timer = 110;
-    mission.text = 'Армията "забрави" техника из града. Намери танк или оръдие и разбий ' + mission.wreckGoal + ' коли, преди да си я приберат!';
-  } else {
-    const h = spawnGear('heli');
-    if (!h) { mission.cooldown = 3; return; }
-    mission.gear = [h];
-    mission.active = true; mission.type = 'raid';
-    mission.wrecks = 0; mission.wreckGoal = 8;
-    mission.reward = 8000; mission.timer = 95;
-    mission.text = 'Отгоре градът е стрелбище. Вземи хеликоптера и бомбардирай ' + mission.wreckGoal + ' коли! Пази се — ще стрелят по теб.';
+    return true;
   }
+  if (m.type === 'race') {
+    for (let i = 0; i < (m.goal || 5); i++) {
+      const sp = randomRoadSpot();
+      if (sp) mission.checkpoints.push({ x: sp.x, y: sp.y });
+    }
+    if (mission.checkpoints.length < 3) return false;
+    if (!m.timer) mission.timer = 20 + mission.checkpoints.length * 13;
+    return true;
+  }
+  if (m.type === 'army') {
+    const gear = [spawnGear('tank'), spawnGear('tank'), spawnGear('cannon'), spawnGear('cannon')].filter(Boolean);
+    if (!gear.length) return false;
+    mission.gear = gear;
+    return true;
+  }
+  if (m.type === 'raid') {
+    const h = spawnGear('heli');
+    if (!h) return false;
+    mission.gear = [h];
+    return true;
+  }
+  if (m.type === 'gangkill') {
+    const gh = mission.gangHint;
+    mission.gangTarget = (gh !== undefined && gh >= 0) ? 1 - gh : Math.floor(R() * 2);
+    mission.text += ' Целта са ' + GANGS[mission.gangTarget].name + '.';
+    return true;
+  }
+  if (m.type === 'bomb') {
+    const spot = randomSideSpotPx(700);
+    if (!spot) return false;
+    mission.drop = spot; mission.bombState = 0; mission.armT = 0;
+    return true;
+  }
+  if (m.type === 'chase') {
+    const c = spawnMissionCar(m.kind || 'sport', 500, 900);
+    if (!c) return false;
+    c.parked = false; c.flee = true;
+    if (m.hp) { c.hp = m.hp; c.maxHp = m.hp; }
+    mission.target = c;
+    return true;
+  }
+  return true;   // wreck, fares, crush, survive — нямат подготовка
+}
+function startMission() {
+  const idx = missionsDone % MISSION_TABLE.length;
+  const cycle = Math.floor(missionsDone / MISSION_TABLE.length);
+  const m = MISSION_TABLE[idx];
+  mission.type = m.type; mission.text = m.txt;
+  mission.reward = Math.floor(m.reward * (1 + cycle * 0.25));
+  mission.timer = m.timer || 120;
+  mission.count = 0; mission.goal = m.goal || 0;
+  mission.wrecks = 0; mission.wreckGoal = m.goal || 0; mission.wreckKind = m.type === 'wreck' ? (m.kind || null) : null;
+  mission.stealth = !!m.stealth; mission.needWanted = m.wanted || 0; mission.surv = 0;
+  mission.checkpoints = []; mission.target = null; mission.drop = null; mission.gear = null;
+  if (!setupMission(m)) { mission.cooldown = 3; return; }
+  mission.active = true;
+  mission.text = (idx + 1) + '/' + MISSION_TABLE.length + (cycle ? ' (кръг ' + (cycle + 1) + ')' : '') + ' · ' + mission.text;
   mission.reward = Math.floor(mission.reward * (theme.payMult || 1));   // по-далечният град плаща повече
   mission.gang = (mission.gangHint !== undefined && mission.gangHint >= 0) ? mission.gangHint : -1;
   mission.gangHint = undefined;
@@ -2035,6 +2118,7 @@ function startMission() {
 function endMission(win) {
   if (mission.type === 'deliver' && mission.target) mission.target.marked = false;
   if (mission.type === 'hit' && mission.target) mission.target.markTarget = false;
+  if (mission.type === 'chase' && mission.target) { mission.target.flee = false; mission.target.marked = false; }
   if (win) {
     missionsDone++;
     meta.metaMissions++;
@@ -2114,7 +2198,38 @@ function updateMission(dt) {
     }
   } else if (mission.type === 'hit') {
     if (mission.target.dead) endMission(true);
+  } else if (mission.type === 'chase') {
+    if (mission.target.dead) endMission(true);
+  } else if (mission.type === 'survive') {
+    if (player.wanted >= mission.needWanted) {
+      mission.surv += dt;
+      if (Math.floor(mission.surv) !== Math.floor(mission.surv - dt) && Math.floor(mission.surv) % 10 === 0)
+        showMsg('Издържа ' + Math.floor(mission.surv) + '/' + mission.goal + ' сек', 1.5);
+      if (mission.surv >= mission.goal) { endMission(true); return; }
+    }
+  } else if (mission.type === 'bomb') {
+    const d = dist2(player.x, player.y, mission.drop.x, mission.drop.y);
+    if (mission.bombState === 0) {
+      if (!player.car && d < 45 * 45) {
+        mission.armT += dt;
+        if (mission.armT >= 2) {
+          mission.bombState = 1; mission.fuse = 12;
+          showMsg('💣 Въоръжена! Изчезвай — 12 секунди!', 3);
+          AudioSys.blip(900, 0.1, 0.2, 'square');
+        }
+      } else mission.armT = 0;
+    } else {
+      mission.fuse -= dt;
+      if (mission.fuse <= 0) {
+        for (let k = 0; k < 3; k++) explode(mission.drop.x + (R() - 0.5) * 90, mission.drop.y + (R() - 0.5) * 90, true);
+        weather.flash = 1;
+        if (d < 180 * 180) damagePlayer(80);
+        if (!player.dead) endMission(true);
+        return;
+      }
+    }
   } else if (mission.type === 'race') {
+    if (mission.stealth && player.wanted > 0) { showMsg('Видяха те. Работата се отменя.', 3); endMission(false); return; }
     const cp = mission.checkpoints[0];
     if (cp && dist2(player.x, player.y, cp.x, cp.y) < 60 * 60) {
       mission.checkpoints.shift();
@@ -2133,10 +2248,23 @@ damageCar = function (c, dmg, byPlayer, cause) {
   const wasDead = c.dead;
   _origDamageCar(c, dmg, byPlayer, cause);
   if (!wasDead && c.dead && byPlayer) dailyProgress('wreck', 1);
-  if (!wasDead && c.dead && byPlayer && mission.active && !c.gear && (mission.type === 'wreck' || mission.type === 'army' || mission.type === 'raid')) {
+  if (!wasDead && c.dead && byPlayer && mission.active && !c.gear && (!mission.wreckKind || c.kind === mission.wreckKind) &&
+      (mission.type === 'wreck' || mission.type === 'army' || mission.type === 'raid')) {
     mission.wrecks++;
     showMsg('Унищожени: ' + mission.wrecks + '/' + mission.wreckGoal, 2);
     if (mission.wrecks >= mission.wreckGoal) endMission(true);
+  }
+};
+
+// Брояч на свалени членове на банда за мисия 'gangkill'
+const _origDamagePed = damagePed;
+damagePed = function (p, dmg, byPlayer, cause) {
+  const wasDead = p.dead;
+  _origDamagePed(p, dmg, byPlayer, cause);
+  if (!wasDead && p.dead && byPlayer && mission.active && mission.type === 'gangkill' && p.gang === mission.gangTarget) {
+    mission.count++;
+    showMsg('Свалени: ' + mission.count + '/' + mission.goal, 2);
+    if (mission.count >= mission.goal) endMission(true);
   }
 };
 
@@ -2319,6 +2447,11 @@ function updateCrusher(dt) {
   showMsg('🗜 Пресата я глътна. +' + fmtMoney(payC), 2.5);
   dailyProgress('crush', 1);
   addRankXp(1);
+  if (mission.active && mission.type === 'crush') {
+    mission.count++;
+    showMsg('Смачкани: ' + mission.count + '/' + mission.goal, 2);
+    if (mission.count >= mission.goal) endMission(true);
+  }
   crusherCd = 3;
 }
 function updateChurch(dt) {
@@ -2373,6 +2506,11 @@ function updateTaxi(dt) {
       showMsg('🚕 Доволен клиент! Огледай се за следващия.', 2);
       dailyProgress('taxi', taxiJob.pay);
       addRankXp(1);
+      if (mission.active && mission.type === 'fares') {
+        mission.count++;
+        showMsg('Курсове: ' + mission.count + '/' + mission.goal, 2);
+        if (mission.count >= mission.goal) endMission(true);
+      }
       taxiJob.dest = null;
     }
   }
@@ -2645,6 +2783,22 @@ function updatePlayerCar(dt, inp, c) {
   player.x = c.x; player.y = c.y; player.angle = c.angle;
 }
 
+// Бягаща кола: държи се далеч от играча с пълна газ
+function updateFleeCar(c, dt) {
+  const ax = c.x - player.x, ay = c.y - player.y;
+  const d = Math.sqrt(ax * ax + ay * ay) || 1;
+  let ta = Math.atan2(ay, ax);
+  const look = 70;
+  if (isSolid(tileAtPx(c.x + Math.cos(c.angle) * look, c.y + Math.sin(c.angle) * look)))
+    ta = c.angle + (R() < 0.5 ? 1.3 : -1.3);
+  c.angle += clamp(angDiff(c.angle, ta), -2.6 * dt, 2.6 * dt);
+  const want = d < 900 ? c.maxSpeed * 0.95 : 60;
+  c.speed += clamp(want - c.speed, -300 * dt, c.accel * dt);
+  const pos = collideCircle(c.x + Math.cos(c.angle) * c.speed * dt, c.y + Math.sin(c.angle) * c.speed * dt, c.r);
+  if (pos.hit) { c.speed *= 0.2; c.angle += (R() - 0.5) * 1.5; }
+  c.x = pos.x; c.y = pos.y;
+  if (c.hp < c.maxHp * 0.5 && R() < dt * 6) FX.smoke(c.x, c.y);
+}
 // Армейски танк: гони играча и стреля със снаряди
 function updateArmyTank(c, dt) {
   if (player.wanted < 5) { c.army = false; c.sentry = false; return; } // отбой — танкът е зарязан
@@ -2711,6 +2865,12 @@ function updateCarAI(c, dt) {
   }
   if (c.hp < c.maxHp * 0.35 && R() < dt * 8) FX.smoke(c.x, c.y);
   if (c.army && c !== player.car) { updateArmyTank(c, dt); return; }
+  if (c.flee && c !== player.car) { updateFleeCar(c, dt); return; }
+  // Барикадата се разпуска, щом издирването падне — иначе трафикът се трупа зад нея
+  if (c.roadblock && player.wanted < 3) {
+    c.roadblock = false; c.parked = false;
+    c.dir = ((Math.round(c.angle / (Math.PI / 2)) % 4) + 4) % 4;
+  }
   if (c === player.car || c.parked) return;
 
   if (c.patrolT > 0) c.patrolT -= dt;
@@ -2774,6 +2934,22 @@ function updateCarAI(c, dt) {
   }
   if (!blocked && !player.car && !player.dead && dist2(player.x, player.y, aheadX, aheadY) < 24 * 24) blocked = true;
 
+  // Заседнал (блокиран и почти спрял)? След 3 сек завива или обръща, вместо да чака вечно —
+  // това разплита "две коли една срещу друга" и опашките зад препятствие.
+  if (blocked && Math.abs(c.speed) < 15) { c.stuckT = (c.stuckT || 0) + dt; c.jamT = (c.jamT || 0) + dt; }
+  else { c.stuckT = 0; if (Math.abs(c.speed) > 40) c.jamT = 0; }
+  if (c.stuckT > 3) {
+    c.stuckT = 0;
+    const opts = c.dir % 2 === 0 ? [1, 3] : [0, 2];
+    const first = Math.floor(R() * 2);
+    let done = false;
+    for (const d of [opts[first], opts[1 - first]]) if (dirRoadOk(tx, ty, d)) { c.dir = d; done = true; break; }
+    if (!done) c.dir = (c.dir + 2) % 4;
+    c.angle = DIR_ANG[c.dir];
+    c.turned = true;
+    c.unblockT = 1.2;                 // секунда не гледа кой е пред него — за да се измъкне
+  }
+  if (c.unblockT > 0) { c.unblockT -= dt; blocked = false; }
   const want = blocked ? 0 : cruise;
   c.speed += clamp(want - c.speed, -300 * dt, 120 * dt);
   // Нетърпелив шофьор — натиска клаксона, когато е блокиран
@@ -2998,7 +3174,9 @@ function recycle(dt) {
     const c = cars[i];
     if (c === player.car || c.marked) continue;
     if (c.dead && c.burnT > 14) { cars.splice(i, 1); continue; }
-    if ((!c.parked || c.roadblock) && dist2(c.x, c.y, player.x, player.y) > FAR) cars.splice(i, 1);
+    if ((!c.parked || c.roadblock) && dist2(c.x, c.y, player.x, player.y) > FAR) { cars.splice(i, 1); continue; }
+    // Задръстване далеч от погледа се разтваря
+    if (c.jamT > 10 && !c.parked && dist2(c.x, c.y, player.x, player.y) > 700 * 700) cars.splice(i, 1);
   }
   for (let i = peds.length - 1; i >= 0; i--) {
     const p = peds[i];
@@ -4586,6 +4764,8 @@ function drawMissionMarkers() {
     if (player.car === mission.target) { tx = mission.drop.x; ty = mission.drop.y; }
     else { tx = mission.target.x; ty = mission.target.y; }
   } else if (mission.type === 'hit') { tx = mission.target.x; ty = mission.target.y; color = '#e55'; }
+  else if (mission.type === 'chase' && mission.target) { tx = mission.target.x; ty = mission.target.y; color = '#e55'; }
+  else if (mission.type === 'bomb' && mission.drop) { tx = mission.drop.x; ty = mission.drop.y; color = mission.bombState ? '#f60' : '#fc5'; }
   else if ((mission.type === 'army' || mission.type === 'raid') && mission.gear && !(player.car && player.car.gear)) {
     let best = null, bd = 1e18;
     for (const g of mission.gear) {
@@ -4668,6 +4848,8 @@ function drawMiniMap() {
       if (player.car === mission.target) { tx = mission.drop.x; ty = mission.drop.y; }
       else { tx = mission.target.x; ty = mission.target.y; }
     } else if (mission.type === 'hit') { tx = mission.target.x; ty = mission.target.y; color = '#e55'; }
+    else if (mission.type === 'chase' && mission.target) { tx = mission.target.x; ty = mission.target.y; color = '#e55'; }
+    else if (mission.type === 'bomb' && mission.drop) { tx = mission.drop.x; ty = mission.drop.y; color = '#fc5'; }
     else if (mission.type === 'race' && mission.checkpoints.length) { tx = mission.checkpoints[0].x; ty = mission.checkpoints[0].y; color = '#fc5'; }
     if (tx !== null) {
       ctx.fillStyle = color;
