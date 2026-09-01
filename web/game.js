@@ -14,7 +14,7 @@
 
 // ---------------- Константи ----------------
 const TILE = 48;
-const MW = 64, MH = 64;
+let MW = 64, MH = 64;   // онлайн картите се удвояват (виж MP.startGame)
 const BLOCK = 8;
 const T = { GRASS: 0, ROAD: 1, SIDE: 2, BUILD: 3, WATER: 4, PARK: 5 };
 const DAY_LENGTH = 180;
@@ -116,7 +116,7 @@ sizeShadowCanvas();
 window.addEventListener('resize', sizeShadowCanvas);
 
 // ---------------- Град ----------------
-const map = new Uint8Array(MW * MH);
+let map = new Uint8Array(MW * MH);
 const blockColor = {}, blockHeight = {}, blockRoof = {};
 let hospitalBlock = null, policeBlock = null, resprayBlock = null;
 
@@ -335,6 +335,7 @@ function editNick() {
       await netEnsure();
       const r = await api('/nick', { id: net.id, token: net.token, nick: inp.value });
       net.nick = r.nick; netSave(); net.board = null; wrap.remove();
+      if (MP.ws && MP.ws.readyState === 1) MP.send({ t: 'nick', nick: net.nick });
     } catch (e) { msg.textContent = e.message; }
   };
 }
@@ -380,11 +381,12 @@ function drawBoardMenu() {
 const WS_URL = API_BASE.replace(/^http/, 'ws') + '/ws';
 const MP_MODES = { free: 'Свободен град', cash: 'Богаташ', bounty: 'Лов на глави' };
 const MP_MODE_DESC = { free: 'Без край и без правила — градът е ваш.', cash: 'Кой ще изкара най-много пари до края на времето.', bounty: 'Кой ще свали най-много съперници.' };
-const MP_CYCLE = { map: ['sofia', 'ruse'], mode: ['free', 'cash', 'bounty'], minutes: [3, 5, 10], police: [true, false], ff: [true, false], traffic: [1, 0.4, 0], weapons: ['all', 'pistol'] };
+const MP_CYCLE = { map: ['sofia', 'ruse'], mode: ['free', 'cash', 'bounty'], minutes: [3, 5, 10], police: [true, false], ff: [true, false], traffic: [1, 0.4, 0], weapons: ['all', 'pistol'], chat: [true, false] };
 const MP_LABEL = {
   map: v => v === 'ruse' ? 'Русе' : 'София', mode: v => MP_MODES[v], minutes: v => v + ' мин',
   police: v => v ? 'Има' : 'Няма', ff: v => v ? 'Вкл' : 'Изкл', traffic: v => v === 1 ? 'Нормален' : v === 0.4 ? 'Рядък' : 'Няма',
   weapons: v => v === 'all' ? 'Пълен арсенал' : 'Само пистолет',
+  chat: v => v ? 'Вкл' : 'Само емоджита',
 };
 const MP = {
   ws: null, connected: false, active: false, sid: 0, lobby: null, players: new Map(),
@@ -468,7 +470,11 @@ const MP = {
     } else if (m.kind === 'died') {
       if (m.by === this.sid) { this.kills++; showMsg('💀 Свали ' + (p ? p.nick : 'съперник') + '!  (' + this.kills + ')', 2.5); AudioSys.gouranga(); }
       if (p) p.dead = true;
-    } else if (m.kind === 'chat' && p) { p.bubble = m.text; p.bubbleT = 3; }
+    } else if (m.kind === 'chat' && p) {
+      p.bubble = m.text; p.bubbleT = 3.5;
+      this.chatLog.push({ nick: p.nick, text: m.text, t: 0, me: false });
+      if (this.chatLog.length > 6) this.chatLog.shift();
+    }
   },
   onDeath() { this.deaths++; this.send({ t: 'ev', kind: 'died', by: this.lastHitBy || 0 }); this.lastHitBy = 0; },
   startGame(settings, seed) {
@@ -477,9 +483,12 @@ const MP = {
     this.savedLives = lives; lives = 99; this.savedTarget = targetScore; targetScore = 1e12;
     for (const p of this.players.values()) p.seen = false;
     this.fakeCars.clear();
-    R = mulberry32(seed >>> 0);                       // всички генерират ЕДНАКЪВ град
+    // Двойно по-голям град, еднакъв за всички: общ seed и едно и също ниво при генерирането
+    MW = 128; MH = 128; map = new Uint8Array(MW * MH);
+    this.savedLevel = level; level = 1;
+    R = mulberry32(seed >>> 0);
     genCityMap(settings.map === 'ruse' ? 1 : 0);
-    R = Math.random;
+    R = Math.random; level = this.savedLevel;
     playerToStart(); spawnWorld();
     player.x += (R() - 0.5) * 90; player.y += (R() - 0.5) * 60;
     if (settings.traffic < 1) for (let i = cars.length - 1; i >= 0; i--) if (!cars[i].parked && R() > settings.traffic) cars.splice(i, 1);
@@ -507,6 +516,8 @@ const MP = {
       if (p.bubbleT > 0) p.bubbleT -= dt;
     }
     if (this.myBubbleT > 0) this.myBubbleT -= dt;
+    for (const c of this.chatLog) c.t += dt;
+    while (this.chatLog.length && this.chatLog[0].t > 9) this.chatLog.shift();
     if (this.timeLeft > 0 && !this.results) {
       this.timeLeft -= dt;
       if (this.timeLeft <= 0) { this.timeLeft = 0; this.finishMatch(false); }
@@ -538,29 +549,57 @@ const MP = {
     if (!this.active) return;
     this.active = false; this.results = null; this.ui(false);
     lives = this.savedLives; targetScore = this.savedTarget; R = Math.random;
+    MW = 64; MH = 64; map = new Uint8Array(MW * MH);   // обратно към единичния град
     started = false; player.car = null; player.dead = false; player.busted = false;
     if (why === 'lobby' && this.lobby) menuState = 'lobby';
     else { this.leaveRoom(); menuState = 'main'; }
     restartGame();                                     // връщаме единичната игра от записа
   },
   leaveGame() { this.send({ t: 'leave' }); this.lobby = null; this.players.clear(); this.endGame('quit'); },
+  chatLog: [],
+  say(text) {
+    text = String(text || '').trim().slice(0, 80);
+    if (!text) return;
+    this.send({ t: 'ev', kind: 'chat', text });
+    this.myBubble = text; this.myBubbleT = 3.5;
+    this.chatLog.push({ nick: 'Ти', text, t: 0, me: true });
+    if (this.chatLog.length > 6) this.chatLog.shift();
+  },
+  openChat() {
+    if (this.chatBox) return;
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:41;background:rgba(5,5,12,.92);padding:10px;display:flex;gap:8px;align-items:center;font-family:sans-serif';
+    const inp = document.createElement('input'); inp.maxLength = 80; inp.placeholder = 'Съобщение до всички...';
+    inp.style.cssText = 'flex:1;font-size:16px;padding:10px 12px;border-radius:6px;border:1px solid #ffd23c;background:#111;color:#fff';
+    const mk = (t, bg) => { const b = document.createElement('div'); b.textContent = t; b.style.cssText = 'padding:10px 14px;border-radius:6px;font-weight:700;background:' + bg + ';color:#111;touch-action:none'; return b; };
+    const ok = mk('Прати', '#ffd23c'), no = mk('✕', '#888');
+    wrap.append(inp, ok, no); document.body.appendChild(wrap); this.chatBox = wrap;
+    setTimeout(() => inp.focus(), 50);
+    const close = () => { wrap.remove(); this.chatBox = null; };
+    no.onpointerdown = close;
+    ok.onpointerdown = () => { this.say(inp.value); close(); };
+    inp.onkeydown = (e) => { if (e.key === 'Enter') { this.say(inp.value); close(); } if (e.key === 'Escape') close(); };
+  },
   ui(on) {
     if (on && !this.emoteWrap) {
       const w = document.createElement('div');
-      w.style.cssText = 'position:fixed;left:50%;bottom:8px;transform:translateX(-50%);z-index:30;display:flex;gap:6px';
-      for (const e of ['👋', '😂', '🔥', '💀', '🏁']) {
-        const b = document.createElement('div'); b.textContent = e;
-        b.style.cssText = 'width:38px;height:38px;border-radius:50%;background:rgba(10,10,18,.75);border:1px solid rgba(255,210,60,.5);display:grid;place-items:center;font-size:20px;user-select:none;-webkit-user-select:none';
-        const fire = (ev) => { ev.preventDefault(); this.send({ t: 'ev', kind: 'chat', text: e }); this.myBubble = e; this.myBubbleT = 3; };
-        b.addEventListener('touchstart', fire, { passive: false }); b.addEventListener('mousedown', fire);
-        w.appendChild(b);
-      }
-      const q = document.createElement('div'); q.textContent = '✕ Излез';
-      q.style.cssText = 'position:fixed;right:10px;top:8px;z-index:30;background:rgba(10,10,18,.8);color:#e08080;border:1px solid #e05a5a;border-radius:6px;padding:6px 10px;font:700 12px sans-serif;user-select:none;-webkit-user-select:none';
-      const quit = (ev) => { ev.preventDefault(); this.leaveGame(); };
-      q.addEventListener('touchstart', quit, { passive: false }); q.addEventListener('mousedown', quit);
+      w.style.cssText = 'position:fixed;left:50%;bottom:8px;transform:translateX(-50%);z-index:30;display:flex;gap:6px;touch-action:none';
+      const mkBtn = (label, onTap, extra) => {
+        const b = document.createElement('div'); b.textContent = label;
+        b.style.cssText = 'height:40px;min-width:40px;padding:0 8px;border-radius:20px;background:rgba(10,10,18,.8);border:1px solid rgba(255,210,60,.55);display:grid;place-items:center;font-size:21px;color:#ffd23c;user-select:none;-webkit-user-select:none;touch-action:none;transition:transform .08s' + (extra || '');
+        b.addEventListener('pointerdown', (ev) => { ev.preventDefault(); ev.stopPropagation(); b.style.transform = 'scale(1.25)'; onTap(); setTimeout(() => { b.style.transform = ''; }, 120); });
+        return b;
+      };
+      for (const e of ['👋', '😂', '🔥', '💀', '🏁']) w.appendChild(mkBtn(e, () => this.say(e)));
+      if (this.rules && this.rules.chat) w.appendChild(mkBtn('💬', () => this.openChat(), ';font-size:18px'));
+      const miniW = clamp(Math.min(VW, VH) * 0.22, 90, 150) + 24;
+      const q = mkBtn('✕ Излез', () => this.leaveGame(), ';font:700 12px sans-serif;color:#e08080;border-color:#e05a5a;height:30px;border-radius:6px');
+      q.style.position = 'fixed'; q.style.right = miniW + 'px'; q.style.top = '8px'; q.style.zIndex = 30;
       document.body.append(w, q); this.emoteWrap = w; this.leaveBtn = q;
-    } else if (!on && this.emoteWrap) { this.emoteWrap.remove(); this.leaveBtn.remove(); this.emoteWrap = null; this.leaveBtn = null; }
+    } else if (!on && this.emoteWrap) {
+      this.emoteWrap.remove(); this.leaveBtn.remove(); this.emoteWrap = null; this.leaveBtn = null;
+      if (this.chatBox) { this.chatBox.remove(); this.chatBox = null; }
+    }
   },
   draw() {
     if (!this.active) return;
@@ -589,20 +628,19 @@ const MP = {
       ctx.fillStyle = '#ffd23c'; ctx.fillText(p.nick, s.x, ty - 2);
       ctx.fillStyle = '#400'; ctx.fillRect(s.x - 16, ty + 1, 32, 3);
       ctx.fillStyle = '#e33'; ctx.fillRect(s.x - 16, ty + 1, 32 * clamp(p.hp / 100, 0, 1), 3);
-      if (p.bubbleT > 0) { ctx.font = '22px sans-serif'; ctx.fillText(p.bubble, s.x, ty - 18); }
+      if (p.bubbleT > 0) drawBubble(p.bubble, s.x, ty - 18, p.bubbleT);
       ctx.restore();
     }
     if (this.myBubbleT > 0) {
       const s = worldToScreen(player.x, player.y);
-      ctx.save(); ctx.font = '22px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-      ctx.fillText(this.myBubble, s.x, s.y - 22 * camZoom); ctx.restore();
+      ctx.save(); drawBubble(this.myBubble, s.x, s.y - 22 * camZoom, this.myBubbleT); ctx.restore();
     }
   },
   drawHud() {
     if (!this.active) return;
     const mode = this.rules.mode;
     ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-    let y = 8;
+    let y = VW < 700 ? 64 : 8;          // на тесен екран — под парите и минимапата
     ctx.font = 'bold 13px sans-serif';
     const head = '🌐 ' + MP_MODES[mode] + (this.timeLeft ? '   ⏱ ' + Math.floor(this.timeLeft / 60) + ':' + String(Math.floor(this.timeLeft % 60)).padStart(2, '0') : '') + '   · ' + (this.players.size + 1) + ' в града';
     const w = ctx.measureText(head).width + 16;
@@ -614,6 +652,20 @@ const MP = {
         ctx.fillStyle = r.me ? '#ffd23c' : '#ddd';
         ctx.fillText(r.nick + (r.me ? ' (ти)' : '') + ' — ' + (mode === 'cash' ? fmtMoney(r.sc) : r.sc + ' 💀'), VW / 2, y); y += 15;
       }
+    }
+    // Чат лог — вляво, над гъбата
+    if (this.chatLog.length) {
+      ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.font = '13px sans-serif';
+      let cy = VH * 0.30;
+      for (const c of this.chatLog) {
+        ctx.globalAlpha = clamp((9 - c.t) / 1.5, 0, 1) * 0.95;
+        const line = c.nick + ': ' + c.text;
+        const w = ctx.measureText(line).width + 12;
+        ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(8, cy, w, 18);
+        ctx.fillStyle = c.me ? '#ffd23c' : '#fff'; ctx.fillText(line, 14, cy + 2);
+        cy += 20;
+      }
+      ctx.globalAlpha = 1;
     }
     ctx.restore();
     if (this.results) this.drawResults();
@@ -640,6 +692,21 @@ const MP = {
   },
   fetchStats() { fetch(API_BASE + '/api/online').then(r => r.json()).then(j => { this.stats = j; }).catch(() => { this.stats = null; }); },
 };
+function drawBubble(text, x, y, tLeft) {
+  const emojiOnly = !/[\p{L}\p{N}]/u.test(text);
+  ctx.globalAlpha = clamp(tLeft / 0.6, 0, 1);
+  ctx.font = (emojiOnly ? 'bold 26px' : 'bold 13px') + ' sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+  const w = ctx.measureText(text).width + 14, h = emojiOnly ? 32 : 22;
+  ctx.fillStyle = 'rgba(255,255,255,0.92)';
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(x - w / 2, y - h, w, h, 8); else ctx.rect(x - w / 2, y - h, w, h);
+  ctx.fill();
+  ctx.beginPath(); ctx.moveTo(x - 5, y); ctx.lineTo(x + 5, y); ctx.lineTo(x, y + 6); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#111';
+  ctx.fillText(text, x, y - (emojiOnly ? 3 : 5));
+  ctx.globalAlpha = 1;
+}
 function drawOnlineMenu() {
   menuButtons = [];
   if (Date.now() - MP.statsT > 4000) { MP.statsT = Date.now(); MP.fetchStats(); }
@@ -651,6 +718,8 @@ function drawOnlineMenu() {
   const st = MP.stats;
   ctx.fillStyle = st ? '#7ee08a' : '#888';
   ctx.fillText(st ? '● Онлайн сега: ' + st.online + (st.online === 1 ? ' играч' : ' играчи') + (st.private ? '  ·  частни игри: ' + st.private : '') : '○ свързвам се...', VW / 2, VH * 0.09 + 28);
+  ctx.font = 'bold 12px sans-serif';
+  menuBtn('✎ ' + (net.nick || 'Избери прякор'), VW - 150, 10, 140, 26, 'nick');
   const w = Math.min(420, VW - 30), x = VW / 2 - w / 2;
   const cardH = clamp(VH * 0.16, 54, 84);
   let y = VH * 0.23;
@@ -706,14 +775,15 @@ function drawLobbyMenu() {
     ctx.textAlign = 'left'; ctx.fillStyle = me ? '#ffd23c' : '#ddd';
     ctx.fillText((isH ? '👑 ' : '') + p.nick + (me ? ' (ти)' : ''), lx + 8, y + 13);
     ctx.textAlign = 'right'; ctx.fillStyle = isH ? '#8aa' : p.ready ? '#7ee08a' : '#666';
-    ctx.fillText(isH ? 'домакин' : p.ready ? 'готов ✓' : 'чака...', lx + colW - 8, y + 13);
+    ctx.fillText((isH ? 'домакин' : p.ready ? 'готов ✓' : 'чака...') + (me ? '  ✎' : ''), lx + colW - 8, y + 13);
+    if (me) menuButtons.push({ x: lx, y, w: colW, h: 26, act: 'nick' });   // тап върху себе си = смяна на прякор
     y += 29;
   }
   // Дясна колона: правила
   let ry = landscape ? 10 : y + 10;
   ctx.textAlign = 'left'; ctx.font = 'bold 12px sans-serif'; ctx.fillStyle = '#8aa';
   ctx.fillText(host ? 'ПРАВИЛА — тапни, за да смениш' : 'ПРАВИЛА — избира домакинът', rx, ry + 8); ry += 22;
-  const rows = [['🗺 Карта', 'map'], ['🎯 Режим', 'mode'], ['⏱ Време', 'minutes'], ['🚔 Полиция', 'police'], ['🔫 Огън по приятели', 'ff'], ['🚗 Трафик', 'traffic'], ['🎒 Оръжия', 'weapons']];
+  const rows = [['🗺 Карта', 'map'], ['🎯 Режим', 'mode'], ['⏱ Време', 'minutes'], ['🚔 Полиция', 'police'], ['🔫 Огън по приятели', 'ff'], ['🚗 Трафик', 'traffic'], ['🎒 Оръжия', 'weapons'], ['💬 Чат', 'chat']];
   const rh = clamp((VH - ry - 110) / rows.length - 4, 22, 32), rf = rh < 26 ? 12 : 13;
   for (const [label, key] of rows) {
     if (key === 'minutes' && L.settings.mode === 'free') continue;
@@ -796,16 +866,25 @@ function drawMainMenu() {
   ctx.font = '14px sans-serif'; ctx.fillStyle = '#8aa';
   ctx.fillText('⭐ ' + rankOf(meta.rankXp).name + '  ·  🚗 ' + meta.collection.length + '/' + Object.keys(CAR_KINDS).length +
     '  ·  🏙 ' + THEMES.filter((t, i) => cityUnlocked(i)).length + '/' + THEMES.length + ' града', VW / 2, VH * 0.2 + 46);
-  const w = Math.min(300, VW - 60), h = 46, x = VW / 2 - w / 2;
-  let y = VH * 0.38;
-  ctx.font = 'bold 17px sans-serif';
+  ctx.font = 'bold 12px sans-serif';
+  menuBtn('✎ ' + (net.nick || 'Избери прякор'), VW / 2 - 80, VH * 0.2 + 62, 160, 26, 'nick');
+  // Адаптивно: в пейзаж бутоните са в две колони, така че всичко се побира на екрана
   const sv = hasSave();
-  if (sv) { menuBtn('▶  ПРОДЪЛЖИ', x, y, w, h, 'continue', 'primary'); y += h + 14; }
-  menuBtn('✦  НОВА ИГРА', x, y, w, h, 'new', sv ? '' : 'primary'); y += h + 14;
-  menuBtn('🌐  ИГРАЙ ОНЛАЙН', x, y, w, h, 'online'); y += h + 14;
-  menuBtn('🏆  КЛАСАЦИЯ', x, y, w, h, 'board'); y += h + 14;
-  menuBtn('⚙  НАСТРОЙКИ', x, y, w, h, 'settings'); y += h + 14;
-  if (scoreBest > 0) { ctx.font = '13px sans-serif'; ctx.fillStyle = '#7ee08a'; ctx.fillText('Рекорд: ' + fmtMoney(scoreBest), VW / 2, y + 10); }
+  const items = [];
+  if (sv) items.push(['▶  ПРОДЪЛЖИ', 'continue', 'primary']);
+  items.push(['✦  НОВА ИГРА', 'new', sv ? '' : 'primary'], ['🌐  ИГРАЙ ОНЛАЙН', 'online', ''], ['🏆  КЛАСАЦИЯ', 'board', ''], ['⚙  НАСТРОЙКИ', 'settings', '']);
+  const cols = VW > VH * 1.25 ? 2 : 1;
+  const perCol = Math.ceil(items.length / cols);
+  const top = VH * 0.2 + 100, bottom = VH - (scoreBest > 0 ? 36 : 14), gap = 10;
+  const h = clamp((bottom - top - gap * perCol) / perCol, 32, 46);
+  const colW = cols === 2 ? Math.min(280, (VW - 60) / 2) : Math.min(300, VW - 60);
+  const x0 = VW / 2 - (cols === 2 ? colW + 10 : colW / 2);
+  ctx.font = 'bold ' + (h < 40 ? 15 : 17) + 'px sans-serif';
+  items.forEach(([label, act, style], i) => {
+    const col = cols === 2 ? Math.floor(i / perCol) : 0, row = cols === 2 ? i % perCol : i;
+    menuBtn(label, x0 + col * (colW + 20), top + row * (h + gap), colW, h, act, style);
+  });
+  if (scoreBest > 0) { ctx.font = '13px sans-serif'; ctx.fillStyle = '#7ee08a'; ctx.textAlign = 'center'; ctx.fillText('Рекорд: ' + fmtMoney(scoreBest), VW / 2, VH - 18); }
   ctx.textBaseline = 'top';
 }
 function drawSettingsMenu() {
@@ -3834,7 +3913,7 @@ function recycle(dt) {
   let liveCars = 0, livePeds = 0;
   for (const c of cars) if (!c.dead && c.kind !== 'police') liveCars++;
   for (const p of peds) if (!p.dead && !p.cop) livePeds++;
-  if (liveCars < (player.wanted >= 6 ? 10 : 36) * (MP.active && MP.rules ? MP.rules.traffic : 1) && R() < dt * 3) {
+  if (liveCars < (player.wanted >= 6 ? 10 : 36) * (MP.active && MP.rules ? MP.rules.traffic * 1.6 : 1) && R() < dt * 3) {
     const s = randomRoadSpot();
     if (s) {
       const d = dist2(s.x, s.y, player.x, player.y);
