@@ -317,23 +317,37 @@ function drawSettingsMenu() {
     ['⚡ Икономичен режим (слаб телефон)', 'lowFx'], ['🕹 По-големи бутони', 'bigCtrl'],
     ['🚗 Кола: две гъби (завой + газ/спирачка)', 'splitCar'],
   ];
-  const w = Math.min(340, VW - 40), h = 42, x = VW / 2 - w / 2;
-  let y = VH * 0.19;
-  for (const [label, key] of rows) {
-    ctx.fillStyle = 'rgba(255,255,255,0.06)'; ctx.fillRect(x, y, w, h);
-    ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.lineWidth = 1; ctx.strokeRect(x, y, w, h);
-    ctx.font = '14px sans-serif'; ctx.textAlign = 'left'; ctx.fillStyle = '#ddd';
-    ctx.fillText(label, x + 12, y + h / 2);
-    ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'right';
+  // Адаптивна подредба: в пейзаж — две колони; височината на реда се свива, докато всичко се побере
+  const cols = VW > VH * 1.25 ? 2 : 1;
+  const perCol = Math.ceil(rows.length / cols);
+  const top = VH * 0.19, bottom = VH - 12;
+  const totalRows = perCol + 2;                       // + изтриване + назад
+  const gap = 6;
+  const h = clamp((bottom - top - gap * (totalRows + 1)) / totalRows, 28, 42);
+  const fs2 = h < 34 ? 12 : 14;
+  const colW = cols === 2 ? Math.min(330, (VW - 60) / 2) : Math.min(340, VW - 40);
+  const x0 = VW / 2 - (cols === 2 ? colW + 10 : colW / 2);
+  let y = top;
+  for (let i = 0; i < rows.length; i++) {
+    const [label, key] = rows[i];
+    const col = cols === 2 ? Math.floor(i / perCol) : 0;
+    const rowI = cols === 2 ? i % perCol : i;
+    const x = x0 + col * (colW + 20), ry = top + rowI * (h + gap);
+    ctx.fillStyle = 'rgba(255,255,255,0.06)'; ctx.fillRect(x, ry, colW, h);
+    ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.lineWidth = 1; ctx.strokeRect(x, ry, colW, h);
+    ctx.font = fs2 + 'px sans-serif'; ctx.textAlign = 'left'; ctx.fillStyle = '#ddd';
+    ctx.fillText(label, x + 10, ry + h / 2);
+    ctx.font = 'bold ' + fs2 + 'px sans-serif'; ctx.textAlign = 'right';
     ctx.fillStyle = settings[key] ? '#7ee08a' : '#888';
-    ctx.fillText(settings[key] ? 'ВКЛ' : 'ИЗКЛ', x + w - 12, y + h / 2);
-    menuButtons.push({ x, y, w, h, act: 'toggle:' + key });
-    y += h + 8;
+    ctx.fillText(settings[key] ? 'ВКЛ' : 'ИЗКЛ', x + colW - 10, ry + h / 2);
+    menuButtons.push({ x, y: ry, w: colW, h, act: 'toggle:' + key });
+    y = Math.max(y, ry + h + gap);
   }
-  y += 10;
-  ctx.font = 'bold 15px sans-serif';
-  menuBtn(resetArmed > 0 ? 'СИГУРЕН ЛИ СИ? Тапни пак' : '🗑 Изтрий целия прогрес', x, y, w, h, 'reset', 'danger'); y += h + 12;
-  menuBtn('← НАЗАД', x, y, w, h, 'back');
+  y += gap;
+  const bw = cols === 2 ? colW * 2 + 20 : colW, bx = x0;
+  ctx.font = 'bold ' + (fs2 + 1) + 'px sans-serif';
+  menuBtn(resetArmed > 0 ? 'СИГУРЕН ЛИ СИ? Тапни пак' : '🗑 Изтрий целия прогрес', bx, y, bw, h, 'reset', 'danger'); y += h + gap;
+  menuBtn('← НАЗАД', bx, y, bw, h, 'back');
   ctx.textBaseline = 'top';
 }
 function menuPrimary() { menuTapAct(hasSave() ? 'continue' : 'new'); }
