@@ -6,6 +6,7 @@
 
     <application
         android:label="GangCity"
+        android:icon="@mipmap/ic_launcher"
         android:hardwareAccelerated="true"
         android:allowBackup="true"
         android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen">
