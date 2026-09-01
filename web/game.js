@@ -132,7 +132,7 @@ function blockKeyOf(tx, ty) { return Math.floor(tx / BLOCK) + ',' + Math.floor(t
 // Градове: София (по действителния център) + класическата тройка
 const THEMES = [
   {
-    name: 'София',
+    name: tr('lSofia'),
     cast: 'rgb(255,240,214)', glow: '255,210,60', nightBias: 0, rainBias: 1, payMult: 1, heatMult: 1,
     tagline: 'Домът. Тук започва всичко.', starCar: 'sport',
     sofia: true,
@@ -146,7 +146,7 @@ const THEMES = [
     streetsV: ['бул. К. Величков', 'бул. Опълченска', 'бул. Мария Луиза', 'бул. Витоша', 'ул. Г. С. Раковски', 'бул. Васил Левски', 'бул. Евлоги Георгиев', 'бул. Цариградско шосе']
   },
   {
-    name: 'Русе',
+    name: tr('lRuse'),
     cast: 'rgb(214,240,208)', glow: '120,220,140', nightBias: 0, rainBias: 1.6, payMult: 1.25, heatMult: 1.1,
     tagline: 'Дунавът е влажен, но плаща добре.', starCar: 'cabrio',
     ruse: true, freeform: true, lowRise: true,
@@ -313,7 +313,7 @@ async function loadBoard() {
     const r = await api('/leaderboard?limit=10');
     net.board = r.top; net.players = r.players;
     try { const d = await api('/daily?date=' + dailyKey(0)); net.dailyCount = d.count; } catch (e) {}
-  } catch (e) { net.err = 'Няма връзка със сървъра.'; }
+  } catch (e) { net.err = tr('noServer'); }
   net.busy = false;
 }
 // ---- Социално: профил, злато, магазин, банда, приятели, конструктор ----
@@ -365,16 +365,16 @@ function drawCommunityMenu() {
   menuButtons = [];
   ctx.fillStyle = '#0a0a12'; ctx.fillRect(0, 0, VW, VH);
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.font = 'bold 26px sans-serif'; ctx.fillStyle = '#ffd23c'; ctx.fillText('👥 ОБЩНОСТ', VW / 2, VH * 0.12);
+  ctx.font = 'bold 26px sans-serif'; ctx.fillStyle = '#ffd23c'; ctx.fillText(tr('commT'), VW / 2, VH * 0.12);
   ctx.font = '13px sans-serif'; ctx.fillStyle = '#8aa';
   ctx.fillText('Бандата те чака. Приятелите те викат. Мисиите ги пишат играчите.', VW / 2, VH * 0.12 + 26);
   const w = Math.min(320, VW - 60), h = clamp(VH * 0.11, 40, 50), x = VW / 2 - w / 2;
   let y = VH * 0.3;
   ctx.font = 'bold 16px sans-serif';
-  menuBtn('🏴  БАНДА' + (net.me && net.me.crew ? ': ' + net.me.crew.name : ''), x, y, w, h, 'crew', net.me && net.me.crew ? 'primary' : ''); y += h + 12;
-  menuBtn('👥  ПРИЯТЕЛИ', x, y, w, h, 'friends'); y += h + 12;
-  menuBtn('🛠  КОНСТРУКТОР НА МИСИИ', x, y, w, h, 'creator'); y += h + 12;
-  menuBtn('← НАЗАД', x, Math.max(y, VH - h - 12), w, h, 'back');
+  menuBtn(tr('crewB') + (net.me && net.me.crew ? ': ' + net.me.crew.name : ''), x, y, w, h, 'crew', net.me && net.me.crew ? 'primary' : ''); y += h + 12;
+  menuBtn(tr('friendsB'), x, y, w, h, 'friends'); y += h + 12;
+  menuBtn(tr('creatorB'), x, y, w, h, 'creator'); y += h + 12;
+  menuBtn(tr('back'), x, Math.max(y, VH - h - 12), w, h, 'back');
   ctx.textBaseline = 'top';
 }
 /* ---- Екран: Банда ---- */
@@ -390,7 +390,7 @@ function drawCrewMenu() {
     let y = VH * 0.25;
     ctx.font = 'bold 14px sans-serif';
     menuBtn('➕  СЪЗДАЙ БАНДА', x, y, w / 2 - 5, 40, 'crewCreate', 'primary');
-    menuBtn('🔑  ВЛЕЗ С КОД', x + w / 2 + 5, y, w / 2 - 5, 40, 'crewJoin'); y += 52;
+    menuBtn(tr('joinCode'), x + w / 2 + 5, y, w / 2 - 5, 40, 'crewJoin'); y += 52;
     if (!social.crewTop && !social.busy) socialCall('/crew/top', null, r => { social.crewTop = r.top; }) ;
     ctx.textAlign = 'left'; ctx.font = 'bold 12px sans-serif'; ctx.fillStyle = '#8aa'; ctx.fillText('ТОП БАНДИ', x, y + 6); y += 18;
     ctx.font = '13px sans-serif';
@@ -423,7 +423,7 @@ function drawCrewMenu() {
   }
   if (social.err) { ctx.textAlign = 'center'; ctx.fillStyle = '#e08080'; ctx.font = '13px sans-serif'; ctx.fillText(social.err, VW / 2, VH - 60); }
   ctx.font = 'bold 14px sans-serif';
-  menuBtn('← НАЗАД', x, VH - 46, w, 36, 'community');
+  menuBtn(tr('back'), x, VH - 46, w, 36, 'community');
   ctx.textBaseline = 'top';
 }
 /* ---- Екран: Приятели ---- */
@@ -449,7 +449,7 @@ function drawFriendsMenu() {
     ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fillRect(x, y, w, rowH - 3);
     ctx.textAlign = 'left'; ctx.fillStyle = f.online ? '#7ee08a' : '#666'; ctx.fillText('●', x + 8, y + rowH / 2 - 1);
     ctx.fillStyle = '#ddd'; ctx.fillText((f.badge || '') + f.nick, x + 24, y + rowH / 2 - 1);
-    let where = f.online ? (f.room ? (f.room.kind === 'pub' ? 'играе в ' + (f.room.code === 'ruse' ? 'Русе' : 'София') : 'в частна игра') : 'в менюто') : 'офлайн';
+    let where = f.online ? (f.room ? (f.room.kind === 'pub' ? 'играе в ' + (f.room.code === 'ruse' ? tr('lRuse') : tr('lSofia')) : 'в частна игра') : 'в менюто') : 'офлайн';
     ctx.fillStyle = f.online ? '#9fc4d8' : '#555'; ctx.font = '11px sans-serif'; ctx.fillText(where, x + 24 + ctx.measureText((f.badge || '') + f.nick).width + 40, y + rowH / 2 - 1);
     ctx.font = (rowH < 30 ? 12 : 13) + 'px sans-serif';
     if (f.online && f.room) { ctx.font = 'bold 12px sans-serif'; menuBtn('▶ Отиди', x + w - 84, y + 2, 78, rowH - 7, 'goto:' + f.room.kind + ':' + f.room.code); ctx.font = (rowH < 30 ? 12 : 13) + 'px sans-serif'; }
@@ -457,7 +457,7 @@ function drawFriendsMenu() {
   }
   if (social.err) { ctx.textAlign = 'center'; ctx.fillStyle = '#e08080'; ctx.font = '13px sans-serif'; ctx.fillText(social.err, VW / 2, VH - 60); }
   ctx.font = 'bold 14px sans-serif';
-  menuBtn('← НАЗАД', x, VH - 46, w, 36, 'community');
+  menuBtn(tr('back'), x, VH - 46, w, 36, 'community');
   ctx.textBaseline = 'top';
 }
 /* ---- Екран: Конструктор на мисии ---- */
@@ -520,7 +520,7 @@ function drawCreatorMenu() {
   }
   if (social.err) { ctx.textAlign = 'center'; ctx.fillStyle = '#e08080'; ctx.font = '12px sans-serif'; ctx.fillText(social.err, VW / 2, VH - 58); }
   ctx.font = 'bold 14px sans-serif';
-  menuBtn('← НАЗАД', x, VH - 46, w, 36, 'community');
+  menuBtn(tr('back'), x, VH - 46, w, 36, 'community');
   ctx.textBaseline = 'top';
 }
 /* ---- Екран: Магазин ---- */
@@ -529,9 +529,9 @@ function drawShopMenu() {
   ctx.fillStyle = '#0a0a12'; ctx.fillRect(0, 0, VW, VH);
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   const w = Math.min(460, VW - 24), x = VW / 2 - w / 2;
-  ctx.font = 'bold 24px sans-serif'; ctx.fillStyle = '#ffd23c'; ctx.fillText('🎨 МАГАЗИН', VW / 2, VH * 0.08);
+  ctx.font = 'bold 24px sans-serif'; ctx.fillStyle = '#ffd23c'; ctx.fillText(tr('shopT'), VW / 2, VH * 0.08);
   ctx.font = 'bold 15px sans-serif'; ctx.fillStyle = '#ffd23c';
-  ctx.fillText('🪙 ' + (net.me ? net.me.gold : '...') + ' злато', VW / 2, VH * 0.08 + 28);
+  ctx.fillText('🪙 ' + (net.me ? net.me.gold : '...') + tr('gold'), VW / 2, VH * 0.08 + 28);
   ctx.font = '11px sans-serif'; ctx.fillStyle = '#8aa';
   ctx.fillText('Злато печелиш от дневни задачи, рангове, мисии и онлайн победи (до 60 на ден). Скоро: премиум градове и без реклами.', VW / 2, VH * 0.08 + 46);
   if (!social.shop) { fetch(API_BASE + '/api/shop').then(r => r.json()).then(r => { social.shop = r.items; }).catch(() => {}); }
@@ -552,14 +552,14 @@ function drawShopMenu() {
     else { ctx.textAlign = 'left'; ctx.font = '18px sans-serif'; ctx.fillStyle = '#fff'; ctx.fillText(it.value, cx + 8, cy + rh / 2); ctx.font = (rh < 36 ? 12 : 13) + 'px sans-serif'; }
     ctx.textAlign = 'left'; ctx.fillStyle = '#ddd'; ctx.fillText(it.name, cx + 34, cy + rh / 2);
     ctx.font = 'bold 12px sans-serif';
-    if (equipped) menuBtn('✓ Носиш', cx + colW - 90, cy + 4, 84, rh - 8, 'unequip:' + it.kind);
-    else if (has) menuBtn('Сложи', cx + colW - 90, cy + 4, 84, rh - 8, 'equip:' + id, 'primary');
+    if (equipped) menuBtn(tr('wearing'), cx + colW - 90, cy + 4, 84, rh - 8, 'unequip:' + it.kind);
+    else if (has) menuBtn(tr('equip'), cx + colW - 90, cy + 4, 84, rh - 8, 'equip:' + id, 'primary');
     else menuBtn('🪙 ' + it.price, cx + colW - 90, cy + 4, 84, rh - 8, 'buy:' + id, net.me && net.me.gold >= it.price ? 'primary' : '');
     ctx.font = (rh < 36 ? 12 : 13) + 'px sans-serif';
   });
   if (social.err) { ctx.textAlign = 'center'; ctx.fillStyle = '#e08080'; ctx.font = '12px sans-serif'; ctx.fillText(social.err, VW / 2, VH - 58); }
   ctx.font = 'bold 14px sans-serif';
-  menuBtn('← НАЗАД', x, VH - 46, w, 36, 'back');
+  menuBtn(tr('back'), x, VH - 46, w, 36, 'back');
   ctx.textBaseline = 'top';
 }
 function cycleUgc(key) {
@@ -582,7 +582,7 @@ function playUgc(u) {
 }
 function startCustomMission(u) {
   const d = u.def;
-  mission.type = d.type; mission.text = d.txt || UGC_LABEL[d.type];
+  mission.type = d.type; mission.text = d.txt || (LANG === 'bg' ? UGC_LABEL[d.type] : missionText(d));
   mission.reward = d.reward; mission.timer = d.timer;
   mission.count = 0; mission.goal = d.goal; mission.wrecks = 0; mission.wreckGoal = d.goal;
   mission.wreckKind = d.type === 'wreck' ? d.kind : null;
@@ -624,13 +624,13 @@ function drawBoardMenu() {
   ctx.fillStyle = '#0a0a12'; ctx.fillRect(0, 0, VW, VH);
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.font = 'bold 26px sans-serif'; ctx.fillStyle = '#ffd23c';
-  ctx.fillText('🏆 КЛАСАЦИЯ', VW / 2, VH * 0.09);
+  ctx.fillText(tr('boardT'), VW / 2, VH * 0.09);
   if (!net.board && !net.busy && !net.err) loadBoard();
   const w = Math.min(420, VW - 30), x = VW / 2 - w / 2;
   const rowH = clamp((VH * 0.70) / 12, 20, 30), fs2 = rowH < 24 ? 12 : 14;
   let y = VH * 0.17;
   ctx.font = fs2 + 'px sans-serif';
-  if (net.busy) { ctx.fillStyle = '#aaa'; ctx.fillText('Зареждам...', VW / 2, y + 20); }
+  if (net.busy) { ctx.fillStyle = '#aaa'; ctx.fillText(tr('loading'), VW / 2, y + 20); }
   else if (net.err) { ctx.fillStyle = '#e08080'; ctx.fillText(net.err + ' Тапни, за да опиташ пак.', VW / 2, y + 20); menuButtons.push({ x: 0, y: 0, w: VW, h: VH * 0.6, act: 'retry' }); }
   else if (net.board) {
     for (let i = 0; i < net.board.length; i++) {
@@ -653,20 +653,20 @@ function drawBoardMenu() {
   y = Math.max(y + 6, VH - bh * 2 - 22);
   ctx.font = 'bold 14px sans-serif';
   menuBtn('✎ Прякор: ' + (net.nick || 'Гангстер'), x, y, w / 2 - 5, bh, 'nick'); 
-  menuBtn('← НАЗАД', x + w / 2 + 5, y, w / 2 - 5, bh, 'back');
+  menuBtn(tr('back'), x + w / 2 + 5, y, w / 2 - 5, bh, 'back');
   ctx.textBaseline = 'top';
 }
 
 /* ---------------- МУЛТИПЛЕЙЪР ---------------- */
 const WS_URL = API_BASE.replace(/^http/, 'ws') + '/ws';
-const MP_MODES = { free: 'Свободен град', cash: 'Богаташ', bounty: 'Лов на глави' };
-const MP_MODE_DESC = { free: 'Без край и без правила — градът е ваш.', cash: 'Кой ще изкара най-много пари до края на времето.', bounty: 'Кой ще свали най-много съперници.' };
+const MP_MODES = { get free() { return tr('mFree'); }, get cash() { return tr('mCash'); }, get bounty() { return tr('mBounty'); } };
+const MP_MODE_DESC = { get free() { return tr('dFree'); }, get cash() { return tr('dCash'); }, get bounty() { return tr('dBounty'); } };
 const MP_CYCLE = { map: ['sofia', 'ruse'], mode: ['free', 'cash', 'bounty'], minutes: [3, 5, 10], police: [true, false], ff: [true, false], traffic: [1, 0.4, 0], weapons: ['all', 'pistol'], chat: [true, false] };
 const MP_LABEL = {
-  map: v => v === 'ruse' ? 'Русе' : 'София', mode: v => MP_MODES[v], minutes: v => v + ' мин',
-  police: v => v ? 'Има' : 'Няма', ff: v => v ? 'Вкл' : 'Изкл', traffic: v => v === 1 ? 'Нормален' : v === 0.4 ? 'Рядък' : 'Няма',
-  weapons: v => v === 'all' ? 'Пълен арсенал' : 'Само пистолет',
-  chat: v => v ? 'Вкл' : 'Само емоджита',
+  map: v => v === 'ruse' ? tr('lRuse') : tr('lSofia'), mode: v => MP_MODES[v], minutes: v => v + ' мин',
+  police: v => v ? tr('lYes') : tr('lNo'), ff: v => v ? tr('lOn') : tr('lOff'), traffic: v => v === 1 ? tr('lNormal') : v === 0.4 ? tr('lRare') : tr('lNo'),
+  weapons: v => v === 'all' ? tr('lAll') : tr('lPistol'),
+  chat: v => v ? tr('lOn') : tr('lEmoji'),
 };
 const MP = {
   ws: null, connected: false, active: false, sid: 0, lobby: null, players: new Map(),
@@ -678,17 +678,28 @@ const MP = {
     if (this.ws && this.ws.readyState === 1) { if (cb) cb(); return; }
     if (this.ws && this.ws.readyState === 0) { this.pendingCb = cb; return; }
     this.err = null;
-    try { this.ws = new WebSocket(WS_URL); } catch (e) { this.err = 'Няма връзка със сървъра.'; this.joining = false; return; }
+    try { this.ws = new WebSocket(WS_URL); } catch (e) { this.err = tr('noServer'); this.joining = false; return; }
     this.ws.onopen = () => { this.connected = true; const c = cb || this.pendingCb; this.pendingCb = null; if (c) c(); };
     this.ws.onmessage = (e) => { try { this.handle(JSON.parse(e.data)); } catch (err) {} };
     this.ws.onclose = () => {
       this.connected = false; this.joining = false;
-      if (this.active) { showMsg('Връзката със сървъра прекъсна.', 3); this.endGame('lost'); }
-      else if (menuState === 'lobby') { this.err = 'Връзката прекъсна.'; this.lobby = null; menuState = 'online'; }
+      if (this.active && !this.quitting) { this.reconnect(); return; }
+      if (this.active) { this.endGame('lost'); }
+      else if (menuState === 'lobby') { this.err = tr('noServer'); this.lobby = null; menuState = 'online'; }
     };
-    this.ws.onerror = () => { this.err = 'Няма връзка със сървъра.'; this.joining = false; };
+    this.ws.onerror = () => { this.err = tr('noServer'); this.joining = false; };
   },
   send(o) { if (this.ws && this.ws.readyState === 1) this.ws.send(JSON.stringify(o)); },
+  // Кратко прекъсване на мобилния интернет не бива да те изхвърля от мача
+  reconnect() {
+    this.retries = (this.retries || 0) + 1;
+    if (this.retries > 4 || !this.lastJoin) { this.retries = 0; showMsg(tr('noServer'), 3); this.endGame('lost'); return; }
+    showMsg(tr('reconnecting'), 2);
+    setTimeout(() => {
+      this.ws = null; this.rejoining = true;
+      this.connect(() => this.send({ ...this.lastJoin, nick: this.nick(), pid: net.id }));
+    }, 1500 * this.retries);
+  },
   nick() { return myDisplayNick(); },
   joinPublic(room) { this.joining = true; this.err = null; this.connect(() => this.send({ t: 'join', room, nick: this.nick(), pid: net.id })); },
   createPrivate() { this.joining = true; this.err = null; this.connect(() => this.send({ t: 'create', nick: this.nick(), pid: net.id })); },
@@ -707,6 +718,8 @@ const MP = {
       case 'welcome':
         this.sid = m.you; this.joining = false; this.lobby = m; this.players.clear();
         for (const p of m.players) if (p.sid !== this.sid) this.players.set(p.sid, this.newRemote(p.nick));
+        this.lastJoin = m.kind === 'pub' ? { t: 'join', room: m.code } : { t: 'joinCode', code: m.code };
+        if (this.rejoining) { this.rejoining = false; this.retries = 0; break; }   // върнахме се в същия мач
         if (m.kind === 'pub') this.startGame(m.settings, m.seed); else menuState = 'lobby';
         break;
       case 'lobby':
@@ -835,7 +848,7 @@ const MP = {
     else { this.leaveRoom(); menuState = 'main'; }
     restartGame();                                     // връщаме единичната игра от записа
   },
-  leaveGame() { this.send({ t: 'leave' }); this.lobby = null; this.players.clear(); this.endGame('quit'); },
+  leaveGame() { this.quitting = true; this.send({ t: 'leave' }); this.lobby = null; this.players.clear(); this.endGame('quit'); this.quitting = false; },
   chatLog: [],
   say(text) {
     text = String(text || '').trim().slice(0, 80);
@@ -993,17 +1006,17 @@ function drawOnlineMenu() {
   ctx.fillStyle = '#0a0a12'; ctx.fillRect(0, 0, VW, VH);
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.font = 'bold 26px sans-serif'; ctx.fillStyle = '#ffd23c';
-  ctx.fillText('🌐 ИГРАЙ ОНЛАЙН', VW / 2, VH * 0.09);
+  ctx.fillText(tr('onlineT'), VW / 2, VH * 0.09);
   ctx.font = 'bold 14px sans-serif';
   const st = MP.stats;
   ctx.fillStyle = st ? '#7ee08a' : '#888';
-  ctx.fillText(st ? '● Онлайн сега: ' + st.online + (st.online === 1 ? ' играч' : ' играчи') + (st.private ? '  ·  частни игри: ' + st.private : '') : '○ свързвам се...', VW / 2, VH * 0.09 + 28);
+  ctx.fillText(st ? tr('onlineNow') + st.online + (st.online === 1 ? tr('players1') : tr('playersN')) + (st.private ? tr('privGames') + st.private : '') : tr('connecting'), VW / 2, VH * 0.09 + 28);
   ctx.font = 'bold 12px sans-serif';
-  menuBtn('✎ ' + (net.nick || 'Избери прякор'), VW - 150, 10, 140, 26, 'nick');
+  menuBtn('✎ ' + (net.nick || tr('pickNick')), VW - 150, 10, 140, 26, 'nick');
   const w = Math.min(420, VW - 30), x = VW / 2 - w / 2;
   const cardH = clamp(VH * 0.16, 54, 84);
   let y = VH * 0.23;
-  const cities = [['sofia', 'София', 'Топло, златисто, у дома', '255,210,60'], ['ruse', 'Русе', 'Дунавът, влажен и зелен', '120,220,140']];
+  const cities = [['sofia', tr('lSofia'), tr('sofiaD'), '255,210,60'], ['ruse', tr('lRuse'), tr('ruseD'), '120,220,140']];
   for (const [key, name, desc, glow] of cities) {
     const n = st ? (st.rooms[key] || 0) : 0;
     ctx.fillStyle = 'rgba(' + glow + ',0.10)'; ctx.fillRect(x, y, w, cardH);
@@ -1015,17 +1028,17 @@ function drawOnlineMenu() {
     ctx.textAlign = 'right'; ctx.font = 'bold 14px sans-serif'; ctx.fillStyle = n ? '#7ee08a' : '#777';
     ctx.fillText('👥 ' + n, x + w - 96, y + cardH * 0.36);
     ctx.font = 'bold 13px sans-serif';
-    menuBtn(MP.joining ? '...' : 'ВЛЕЗ ▶', x + w - 86, y + cardH / 2 - 17, 74, 34, 'join:' + key, 'primary');
+    menuBtn(MP.joining ? '...' : tr('join'), x + w - 86, y + cardH / 2 - 17, 74, 34, 'join:' + key, 'primary');
     y += cardH + 10;
   }
   y += 4;
   const bh = clamp(VH * 0.09, 36, 44);
   ctx.font = 'bold 14px sans-serif';
-  menuBtn('➕  СЪЗДАЙ ЧАСТНА ИГРА', x, y, w / 2 - 5, bh, 'create'); 
-  menuBtn('🔑  ВЛЕЗ С КОД', x + w / 2 + 5, y, w / 2 - 5, bh, 'code'); y += bh + 8;
+  menuBtn(tr('createPriv'), x, y, w / 2 - 5, bh, 'create'); 
+  menuBtn(tr('joinCode'), x + w / 2 + 5, y, w / 2 - 5, bh, 'code'); y += bh + 8;
   if (MP.err) { ctx.textAlign = 'center'; ctx.fillStyle = '#e08080'; ctx.font = '13px sans-serif'; ctx.fillText(MP.err, VW / 2, y + 10); y += 22; }
   ctx.font = 'bold 14px sans-serif';
-  menuBtn('← НАЗАД', x, Math.max(y, VH - bh - 12), w, bh, 'onlineBack');
+  menuBtn(tr('back'), x, Math.max(y, VH - bh - 12), w, bh, 'onlineBack');
   ctx.textBaseline = 'top';
 }
 function drawLobbyMenu() {
@@ -1041,13 +1054,13 @@ function drawLobbyMenu() {
   // Лява колона: код + играчи
   let y = 10;
   ctx.textAlign = 'left'; ctx.font = 'bold 12px sans-serif'; ctx.fillStyle = '#8aa';
-  ctx.fillText('ЧАСТНА ИГРА · КОД ЗА ПОКАНА', lx, y + 8); y += 22;
+  ctx.fillText(tr('lobbyCode'), lx, y + 8); y += 22;
   ctx.font = 'bold ' + Math.min(38, colW * 0.16) + 'px monospace'; ctx.fillStyle = '#ffd23c';
   ctx.fillText(L.code, lx, y + 18);
   ctx.font = 'bold 12px sans-serif';
-  menuBtn('📤 Сподели', lx + colW - 96, y + 3, 96, 30, 'share'); y += 44;
+  menuBtn(tr('share'), lx + colW - 96, y + 3, 96, 30, 'share'); y += 44;
   ctx.textAlign = 'left'; ctx.font = 'bold 12px sans-serif'; ctx.fillStyle = '#8aa';
-  ctx.fillText('ИГРАЧИ (' + L.players.length + '/12)', lx, y + 6); y += 20;
+  ctx.fillText(tr('playersHdr') + L.players.length + '/12)', lx, y + 6); y += 20;
   ctx.font = '14px sans-serif';
   for (const p of L.players) {
     const me = p.sid === MP.sid, isH = p.sid === L.host;
@@ -1055,15 +1068,15 @@ function drawLobbyMenu() {
     ctx.textAlign = 'left'; ctx.fillStyle = me ? '#ffd23c' : '#ddd';
     ctx.fillText((isH ? '👑 ' : '') + p.nick + (me ? ' (ти)' : ''), lx + 8, y + 13);
     ctx.textAlign = 'right'; ctx.fillStyle = isH ? '#8aa' : p.ready ? '#7ee08a' : '#666';
-    ctx.fillText((isH ? 'домакин' : p.ready ? 'готов ✓' : 'чака...') + (me ? '  ✎' : ''), lx + colW - 8, y + 13);
+    ctx.fillText((isH ? tr('hostL') : p.ready ? tr('readyL') : tr('waitingL')) + (me ? '  ✎' : ''), lx + colW - 8, y + 13);
     if (me) menuButtons.push({ x: lx, y, w: colW, h: 26, act: 'nick' });   // тап върху себе си = смяна на прякор
     y += 29;
   }
   // Дясна колона: правила
   let ry = landscape ? 10 : y + 10;
   ctx.textAlign = 'left'; ctx.font = 'bold 12px sans-serif'; ctx.fillStyle = '#8aa';
-  ctx.fillText(host ? 'ПРАВИЛА — тапни, за да смениш' : 'ПРАВИЛА — избира домакинът', rx, ry + 8); ry += 22;
-  const rows = [['🗺 Карта', 'map'], ['🎯 Режим', 'mode'], ['⏱ Време', 'minutes'], ['🚔 Полиция', 'police'], ['🔫 Огън по приятели', 'ff'], ['🚗 Трафик', 'traffic'], ['🎒 Оръжия', 'weapons'], ['💬 Чат', 'chat']];
+  ctx.fillText(host ? tr('rulesHost') : tr('rulesGuest'), rx, ry + 8); ry += 22;
+  const rows = [[tr('rMap'), 'map'], [tr('rMode'), 'mode'], [tr('rTime'), 'minutes'], [tr('rPolice'), 'police'], [tr('rFF'), 'ff'], [tr('rTraffic'), 'traffic'], [tr('rWeapons'), 'weapons'], [tr('rChat'), 'chat']];
   const rh = clamp((VH - ry - 110) / rows.length - 4, 22, 32), rf = rh < 26 ? 12 : 13;
   for (const [label, key] of rows) {
     if (key === 'minutes' && L.settings.mode === 'free') continue;
@@ -1083,11 +1096,11 @@ function drawLobbyMenu() {
   if (host) {
     const others = L.players.filter(p => p.sid !== L.host);
     const allReady = others.every(p => p.ready);
-    menuBtn(others.length && !allReady ? 'СТАРТ (чакам готови...)' : '▶  СТАРТ', pad, by, bw, 36, 'start', 'primary');
+    menuBtn(others.length && !allReady ? tr('startWait') : tr('start'), pad, by, bw, 36, 'start', 'primary');
   } else {
-    menuBtn(MP.myReady() ? '✓ ГОТОВ' : 'ГОТОВ?', pad, by, bw, 36, 'ready', MP.myReady() ? '' : 'primary');
+    menuBtn(MP.myReady() ? tr('readyBtn') : tr('readyQ'), pad, by, bw, 36, 'ready', MP.myReady() ? '' : 'primary');
   }
-  menuBtn('НАПУСНИ', pad * 2 + bw, by, bw, 36, 'leave');
+  menuBtn(tr('leave'), pad * 2 + bw, by, bw, 36, 'leave');
   ctx.textBaseline = 'top';
 }
 function editCode() {
@@ -1122,6 +1135,199 @@ function applySettings() {
   if (typeof touch !== 'undefined' && touch.layout) touch.layout();
 }
 
+/* ---------------- Обучение (първите 60 секунди) ---------------- */
+const tut = { step: -1, sx: 0, sy: 0, t: 0 };
+function tutStart() { if (meta.tutorialDone || meta.metaMissions > 0 || MP.active) { tut.step = -1; return; } tut.step = 0; tut.sx = player.x; tut.sy = player.y; tut.t = 0; }
+function tutUpdate(dt) {
+  if (tut.step < 0) return;
+  tut.t += dt;
+  if (tut.step === 0 && dist2(player.x, player.y, tut.sx, tut.sy) > 120 * 120) { tut.step = 1; AudioSys.pickup(); }
+  else if (tut.step === 1 && player.car) { tut.step = 2; AudioSys.pickup(); mission.cooldown = 0; }
+  else if (tut.step === 2 && mission.active) { tut.step = 3; }
+  else if (tut.step === 3 && !mission.active && meta.metaMissions > 0) {
+    tut.step = -1; meta.tutorialDone = true; saveMeta(); addScore(500, player.x, player.y - 20); showMsg(tr('tutDone'), 4); AudioSys.gouranga();
+  }
+}
+function tutDraw() {
+  if (tut.step < 0 || !started) return;
+  const text = tr('tut' + tut.step);
+  ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = 'bold 14px sans-serif';
+  const w = Math.min(VW - 20, ctx.measureText(text).width + 24), y = VW < 700 ? 96 : 34;
+  ctx.fillStyle = 'rgba(255,210,60,0.92)';
+  ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(VW / 2 - w / 2, y, w, 30, 8); else ctx.rect(VW / 2 - w / 2, y, w, 30); ctx.fill();
+  ctx.fillStyle = '#111'; ctx.fillText(text, VW / 2, y + 15);
+  if (tut.step === 2 && !mission.active) {           // стрелка към най-близкия телефон
+    let best = null, bd = 1e18;
+    for (const ph of phones) { const d = dist2(ph.x, ph.y, player.x, player.y); if (d < bd) { bd = d; best = ph; } }
+    if (best) {
+      const a = Math.atan2(best.y - player.y, best.x - player.x);
+      const s2 = worldToScreen(best.x, best.y);
+      const on = s2.x > 0 && s2.y > 0 && s2.x < VW && s2.y < VH;
+      const mx = on ? s2.x : VW / 2 + Math.cos(a) * Math.min(VW, VH) * 0.36, my = on ? s2.y - 28 : VH / 2 + Math.sin(a) * Math.min(VW, VH) * 0.36;
+      ctx.translate(mx, my); ctx.rotate(on ? Math.PI / 2 : a);
+      const pulse = 1 + Math.sin(tut.t * 8) * 0.15;
+      ctx.scale(pulse, pulse); ctx.fillStyle = '#ffd23c';
+      ctx.beginPath(); ctx.moveTo(16, 0); ctx.lineTo(-10, 10); ctx.lineTo(-10, -10); ctx.closePath(); ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
+/* ---------------- Езици ---------------- */
+const LANGS = { bg: 'Български', en: 'English', ru: 'Русский', zh: '中文', ja: '日本語', hi: 'हिन्दी' };
+const LANG_ORDER = ['bg', 'en', 'ru', 'zh', 'ja', 'hi'];
+const I18N = {
+  continue: ["▶  ПРОДЪЛЖИ","▶  CONTINUE","▶  ПРОДОЛЖИТЬ","▶  继续","▶  つづける","▶  जारी रखें"],
+  newGame: ["✦  НОВА ИГРА","✦  NEW GAME","✦  НОВАЯ ИГРА","✦  新游戏","✦  ニューゲーム","✦  नया गेम"],
+  online: ["🌐  ИГРАЙ ОНЛАЙН","🌐  PLAY ONLINE","🌐  ИГРАТЬ ОНЛАЙН","🌐  在线游戏","🌐  オンラインで遊ぶ","🌐  ऑनलाइन खेलें"],
+  community: ["👥  ОБЩНОСТ","👥  COMMUNITY","👥  СООБЩЕСТВО","👥  社区","👥  コミュニティ","👥  समुदाय"],
+  shop: ["🎨  МАГАЗИН","🎨  SHOP","🎨  МАГАЗИН","🎨  商店","🎨  ショップ","🎨  दुकान"],
+  board: ["🏆  КЛАСАЦИЯ","🏆  LEADERBOARD","🏆  РЕЙТИНГ","🏆  排行榜","🏆  ランキング","🏆  लीडरबोर्ड"],
+  settings: ["⚙  НАСТРОЙКИ","⚙  SETTINGS","⚙  НАСТРОЙКИ","⚙  设置","⚙  設定","⚙  सेटिंग्स"],
+  pickNick: ["Избери прякор","Pick a nickname","Выбери ник","选择昵称","ニックネームを選ぶ","उपनाम चुनें"],
+  record: ["Рекорд: ","Best: ","Рекорд: ","纪录：","記録：","रिकॉर्ड: "],
+  settingsT: ["НАСТРОЙКИ","SETTINGS","НАСТРОЙКИ","设置","設定","सेटिंग्स"],
+  sfx: ["🔊 Звукови ефекти","🔊 Sound effects","🔊 Звуковые эффекты","🔊 音效","🔊 効果音","🔊 ध्वनि प्रभाव"],
+  music: ["🎵 Музика","🎵 Music","🎵 Музыка","🎵 音乐","🎵 音楽","🎵 संगीत"],
+  vibro: ["📳 Вибрация при удар","📳 Vibrate on hit","📳 Вибрация при ударе","📳 受击震动","📳 被弾時に振動","📳 हिट पर कंपन"],
+  lowFx: ["⚡ Икономичен режим (слаб телефон)","⚡ Low-power mode (older phones)","⚡ Экономный режим (слабый телефон)","⚡ 省电模式（旧手机）","⚡ 省電力モード（低性能端末）","⚡ कम पावर मोड (पुराना फ़ोन)"],
+  bigCtrl: ["🕹 По-големи бутони","🕹 Bigger buttons","🕹 Крупные кнопки","🕹 更大的按钮","🕹 ボタンを大きく","🕹 बड़े बटन"],
+  splitCar: ["🚗 Кола: две гъби (завой + газ/спирачка)","🚗 Car: two sticks (steer + gas/brake)","🚗 Машина: два стика (руль + газ/тормоз)","🚗 汽车：双摇杆（转向 + 油门/刹车）","🚗 車：2スティック（操舵＋アクセル/ブレーキ）","🚗 कार: दो स्टिक (स्टीयर + गैस/ब्रेक)"],
+  lang: ["🌍 Език","🌍 Language","🌍 Язык","🌍 语言","🌍 言語","🌍 भाषा"],
+  resetArmed: ["СИГУРЕН ЛИ СИ? Тапни пак","ARE YOU SURE? Tap again","ТОЧНО? Нажми ещё раз","确定吗？再点一次","本当に？もう一度タップ","पक्का? फिर टैप करें"],
+  reset: ["🗑 Изтрий целия прогрес","🗑 Delete all progress","🗑 Удалить весь прогресс","🗑 删除所有进度","🗑 すべての進行を削除","🗑 सारी प्रगति मिटाएँ"],
+  back: ["← НАЗАД","← BACK","← НАЗАД","← 返回","← もどる","← वापस"],
+  on: ["ВКЛ","ON","ВКЛ","开","オン","चालू"],
+  off: ["ИЗКЛ","OFF","ВЫКЛ","关","オフ","बंद"],
+  menu: ["← Меню","← Menu","← Меню","← 菜单","← メニュー","← मेनू"],
+  onlineT: ["🌐 ИГРАЙ ОНЛАЙН","🌐 PLAY ONLINE","🌐 ИГРАТЬ ОНЛАЙН","🌐 在线游戏","🌐 オンラインで遊ぶ","🌐 ऑनलाइन खेलें"],
+  onlineNow: ["● Онлайн сега: ","● Online now: ","● Сейчас онлайн: ","● 当前在线：","● オンライン：","● अभी ऑनलाइन: "],
+  players1: [" играч"," player"," игрок"," 名玩家"," 人"," खिलाड़ी"],
+  playersN: [" играчи"," players"," игроков"," 名玩家"," 人"," खिलाड़ी"],
+  privGames: ["  ·  частни игри: ","  ·  private games: ","  ·  частных игр: ","  ·  私人房间：","  ·  プライベート：","  ·  निजी गेम: "],
+  connecting: ["○ свързвам се...","○ connecting...","○ подключение...","○ 连接中...","○ 接続中...","○ जुड़ रहा है..."],
+  join: ["ВЛЕЗ ▶","JOIN ▶","ВОЙТИ ▶","加入 ▶","参加 ▶","जुड़ें ▶"],
+  createPriv: ["➕  СЪЗДАЙ ЧАСТНА ИГРА","➕  CREATE PRIVATE GAME","➕  СОЗДАТЬ ЧАСТНУЮ ИГРУ","➕  创建私人房间","➕  プライベート作成","➕  निजी गेम बनाएँ"],
+  joinCode: ["🔑  ВЛЕЗ С КОД","🔑  JOIN WITH CODE","🔑  ВОЙТИ ПО КОДУ","🔑  输入代码加入","🔑  コードで参加","🔑  कोड से जुड़ें"],
+  sofiaD: ["Топло, златисто, у дома","Warm, golden, home","Тёплый, золотой, дом","温暖、金色、家","暖かく黄金の故郷","गर्म, सुनहरा, घर"],
+  ruseD: ["Дунавът, влажен и зелен","The Danube, humid and green","Дунай, влажный и зелёный","多瑙河，湿润而翠绿","ドナウ、湿った緑","डेन्यूब, नम और हरा"],
+  lobbyCode: ["ЧАСТНА ИГРА · КОД ЗА ПОКАНА","PRIVATE GAME · INVITE CODE","ЧАСТНАЯ ИГРА · КОД ПРИГЛАШЕНИЯ","私人房间 · 邀请码","プライベート · 招待コード","निजी गेम · आमंत्रण कोड"],
+  share: ["📤 Сподели","📤 Share","📤 Поделиться","📤 分享","📤 共有","📤 साझा करें"],
+  playersHdr: ["ИГРАЧИ (","PLAYERS (","ИГРОКИ (","玩家 (","プレイヤー (","खिलाड़ी ("],
+  hostL: ["домакин","host","хост","房主","ホスト","होस्ट"],
+  readyL: ["готов ✓","ready ✓","готов ✓","已准备 ✓","準備OK ✓","तैयार ✓"],
+  waitingL: ["чака...","waiting...","ждёт...","等待中...","待機中...","इंतज़ार..."],
+  rulesHost: ["ПРАВИЛА — тапни, за да смениш","RULES — tap to change","ПРАВИЛА — нажми, чтобы изменить","规则 — 点击更改","ルール — タップで変更","नियम — बदलने के लिए टैप करें"],
+  rulesGuest: ["ПРАВИЛА — избира домакинът","RULES — set by the host","ПРАВИЛА — выбирает хост","规则 — 由房主设置","ルール — ホストが設定","नियम — होस्ट तय करता है"],
+  rMap: ["🗺 Карта","🗺 Map","🗺 Карта","🗺 地图","🗺 マップ","🗺 नक्शा"],
+  rMode: ["🎯 Режим","🎯 Mode","🎯 Режим","🎯 模式","🎯 モード","🎯 मोड"],
+  rTime: ["⏱ Време","⏱ Time","⏱ Время","⏱ 时间","⏱ 時間","⏱ समय"],
+  rPolice: ["🚔 Полиция","🚔 Police","🚔 Полиция","🚔 警察","🚔 警察","🚔 पुलिस"],
+  rFF: ["🔫 Огън по приятели","🔫 Friendly fire","🔫 Огонь по своим","🔫 友军伤害","🔫 フレンドリーファイア","🔫 फ्रेंडली फायर"],
+  rTraffic: ["🚗 Трафик","🚗 Traffic","🚗 Трафик","🚗 交通","🚗 交通量","🚗 ट्रैफ़िक"],
+  rWeapons: ["🎒 Оръжия","🎒 Weapons","🎒 Оружие","🎒 武器","🎒 武器","🎒 हथियार"],
+  rChat: ["💬 Чат","💬 Chat","💬 Чат","💬 聊天","💬 チャット","💬 चैट"],
+  startWait: ["СТАРТ (чакам готови...)","START (waiting for ready...)","СТАРТ (ждём готовности...)","开始（等待准备...）","スタート（準備待ち...）","शुरू (तैयारी का इंतज़ार...)"],
+  start: ["▶  СТАРТ","▶  START","▶  СТАРТ","▶  开始","▶  スタート","▶  शुरू"],
+  readyBtn: ["✓ ГОТОВ","✓ READY","✓ ГОТОВ","✓ 已准备","✓ 準備OK","✓ तैयार"],
+  readyQ: ["ГОТОВ?","READY?","ГОТОВ?","准备好了？","準備できた？","तैयार?"],
+  leave: ["НАПУСНИ","LEAVE","ВЫЙТИ","离开","退出","छोड़ें"],
+  mFree: ["Свободен град","Free roam","Свободный город","自由漫游","フリーローム","फ्री रोम"],
+  mCash: ["Богаташ","Money king","Богач","富豪","マネーキング","धनवान"],
+  mBounty: ["Лов на глави","Bounty hunt","Охота за головами","赏金猎杀","バウンティハント","बाउंटी हंट"],
+  dFree: ["Без край и без правила — градът е ваш.","No end, no rules — the city is yours.","Без конца и правил — город ваш.","无尽无规则 — 城市属于你们。","終わりもルールもなし。街は君たちのもの。","न अंत, न नियम — शहर आपका है।"],
+  dCash: ["Кой ще изкара най-много пари до края на времето.","Who earns the most cash before time runs out.","Кто заработает больше всех до конца времени.","时间结束前谁赚的钱最多。","時間内に一番稼いだ人の勝ち。","समय खत्म होने तक सबसे ज़्यादा पैसा कौन कमाता है।"],
+  dBounty: ["Кой ще свали най-много съперници.","Who takes down the most rivals.","Кто уберёт больше всех соперников.","谁击倒的对手最多。","ライバルを一番倒した人の勝ち。","सबसे ज़्यादा प्रतिद्वंद्वी कौन गिराता है।"],
+  lRuse: ["Русе","Ruse","Русе","鲁塞","ルセ","रूसे"],
+  lSofia: ["София","Sofia","София","索非亚","ソフィア","सोफ़िया"],
+  lYes: ["Има","Yes","Есть","有","あり","हाँ"],
+  lNo: ["Няма","No","Нет","无","なし","नहीं"],
+  lOn: ["Вкл","On","Вкл","开","オン","चालू"],
+  lOff: ["Изкл","Off","Выкл","关","オフ","बंद"],
+  lNormal: ["Нормален","Normal","Обычный","正常","通常","सामान्य"],
+  lRare: ["Рядък","Sparse","Редкий","稀少","まばら","कम"],
+  lAll: ["Пълен арсенал","Full arsenal","Полный арсенал","全副武装","フル装備","पूरा शस्त्रागार"],
+  lPistol: ["Само пистолет","Pistol only","Только пистолет","仅手枪","ピストルのみ","सिर्फ़ पिस्तौल"],
+  lEmoji: ["Само емоджита","Emoji only","Только эмодзи","仅表情","絵文字のみ","सिर्फ़ इमोजी"],
+  commT: ["👥 ОБЩНОСТ","👥 COMMUNITY","👥 СООБЩЕСТВО","👥 社区","👥 コミュニティ","👥 समुदाय"],
+  crewB: ["🏴  БАНДА","🏴  CREW","🏴  БАНДА","🏴  帮派","🏴  クルー","🏴  गैंग"],
+  friendsB: ["👥  ПРИЯТЕЛИ","👥  FRIENDS","👥  ДРУЗЬЯ","👥  好友","👥  フレンド","👥  दोस्त"],
+  creatorB: ["🛠  КОНСТРУКТОР НА МИСИИ","🛠  MISSION BUILDER","🛠  КОНСТРУКТОР МИССИЙ","🛠  任务编辑器","🛠  ミッション作成","🛠  मिशन बिल्डर"],
+  boardT: ["🏆 КЛАСАЦИЯ","🏆 LEADERBOARD","🏆 РЕЙТИНГ","🏆 排行榜","🏆 ランキング","🏆 लीडरबोर्ड"],
+  loading: ["Зареждам...","Loading...","Загрузка...","加载中...","読み込み中...","लोड हो रहा है..."],
+  noServer: ["Няма връзка със сървъра.","No connection to the server.","Нет связи с сервером.","无法连接服务器。","サーバーに接続できません。","सर्वर से कनेक्शन नहीं।"],
+  shopT: ["🎨 МАГАЗИН","🎨 SHOP","🎨 МАГАЗИН","🎨 商店","🎨 ショップ","🎨 दुकान"],
+  gold: [" злато"," gold"," золота"," 金币"," ゴールド"," सोना"],
+  equip: ["Сложи","Equip","Надеть","装备","装備","पहनें"],
+  wearing: ["✓ Носиш","✓ Wearing","✓ Надето","✓ 已装备","✓ 装備中","✓ पहना है"],
+  fromSave: ["Продължаваш от последния запис.","Continuing from your last save.","Продолжаем с последнего сохранения.","从上次存档继续。","前回のセーブから続けます。","आख़िरी सेव से जारी।"],
+  unlockedT: ["🔓  НОВ ГРАД ОТКЛЮЧЕН","🔓  NEW CITY UNLOCKED","🔓  НОВЫЙ ГОРОД ОТКРЫТ","🔓  新城市已解锁","🔓  新しい街を解放","🔓  नया शहर अनलॉक"],
+  conqueredT: ["🏆  ГРАДЪТ Е ПРЕВЗЕТ · ДОБРЕ ДОШЪЛ В","🏆  CITY TAKEN · WELCOME TO","🏆  ГОРОД ВЗЯТ · ДОБРО ПОЖАЛОВАТЬ В","🏆  城市已占领 · 欢迎来到","🏆  街を制圧 · ようこそ","🏆  शहर जीत लिया · स्वागत है"],
+  continueB: ["ПРОДЪЛЖИ","CONTINUE","ПРОДОЛЖИТЬ","继续","つづける","जारी रखें"],
+  stay: ["ОСТАНИ","STAY","ОСТАТЬСЯ","留下","とどまる","रुकें"],
+  travel: ["ЗАМИНИ  ✈","TRAVEL  ✈","ПОЕХАЛИ  ✈","出发  ✈","出発  ✈","चलें  ✈"],
+  chooseLang: ["Избери език","Choose your language","Выбери язык","选择语言","言語を選んでください","अपनी भाषा चुनें"],
+  detected: ["Разпознат автоматично: ","Auto-detected: ","Определён автоматически: ","自动识别：","自動判定：","स्वतः पहचाना: "],
+  langHint: ["Можеш да го смениш по всяко време от Настройки.","You can change it anytime in Settings.","Можно изменить в Настройках.","可随时在设置中更改。","設定でいつでも変更できます。","सेटिंग्स में कभी भी बदल सकते हैं।"],
+  tut0: ["👆 Плъзни лявата гъба, за да се движиш","👆 Drag the left stick to move","👆 Тяни левый стик, чтобы идти","👆 拖动左摇杆移动","👆 左スティックで移動","👆 चलने के लिए बायाँ स्टिक खींचें"],
+  tut1: ["🚗 Приближи кола и натисни 🚗, за да я откраднеш","🚗 Walk up to a car and press 🚗 to steal it","🚗 Подойди к машине и нажми 🚗, чтобы угнать","🚗 走近汽车并按 🚗 偷车","🚗 車に近づき 🚗 で盗む","🚗 कार के पास जाकर 🚗 दबाएँ"],
+  tut2: ["☎ Следвай стрелката до телефона — там чака работа","☎ Follow the arrow to the phone — a job is waiting","☎ Иди по стрелке к телефону — там ждёт работа","☎ 跟随箭头到电话 — 有活儿等着","☎ 矢印の先の電話へ。仕事が待っている","☎ तीर के साथ फ़ोन तक जाएँ — काम इंतज़ार में है"],
+  tut3: ["🎯 Изпълни мисията. Наградата е твоя","🎯 Complete the mission. The reward is yours","🎯 Выполни миссию. Награда твоя","🎯 完成任务，奖励归你","🎯 ミッションを完了。報酬は君のもの","🎯 मिशन पूरा करें। इनाम आपका"],
+  tutDone: ["🎓 Готов си. Градът е твой. +$500","🎓 You are ready. The city is yours. +$500","🎓 Ты готов. Город твой. +$500","🎓 你准备好了，城市属于你。+$500","🎓 準備完了。街は君のものだ。+$500","🎓 आप तैयार हैं। शहर आपका है। +$500"],
+  autoLow: ["⚡ Слаби кадри — включих икономичния режим","⚡ Low framerate — low-power mode enabled","⚡ Низкий FPS — включён экономный режим","⚡ 帧率低 — 已开启省电模式","⚡ フレーム低下 — 省電力モードをオン","⚡ फ़्रेमरेट कम — कम पावर मोड चालू"],
+  reconnecting: ["📡 Връзката падна, опитвам пак...","📡 Connection lost, retrying...","📡 Связь потеряна, пробую снова...","📡 连接中断，重试中...","📡 接続が切れました。再接続中...","📡 कनेक्शन टूटा, फिर कोशिश..."],
+  cloudPulled: ["☁ Свалих по-нов запис от облака.","☁ Newer cloud save downloaded.","☁ Загружено более новое сохранение из облака.","☁ 已下载更新的云存档。","☁ より新しいクラウドセーブを取得。","☁ नया क्लाउड सेव डाउनलोड हुआ।"],
+  m_deliver: ["Открадни кола{kind} и я закарай в гаража.","Steal a car{kind} and bring it to the garage.","Угони машину{kind} и доставь в гараж.","偷一辆车{kind}并开到车库。","車{kind}を盗んでガレージへ。","एक कार{kind} चुराकर गैराज तक लाएँ।"],
+  m_hit: ["Премахни {n} цели, преди да изтече времето.","Take out {n} target(s) before time runs out.","Убери {n} цель(и) до конца времени.","在时限内解决 {n} 个目标。","時間内に{n}人の標的を始末しろ。","समय खत्म होने से पहले {n} लक्ष्य हटाएँ।"],
+  m_race: ["Мини {n} чекпойнта срещу часовника.","Hit {n} checkpoints against the clock.","Пройди {n} чекпоинтов на время.","限时通过 {n} 个检查点。","{n}か所のチェックポイントをタイムアタック。","समय के विरुद्ध {n} चेकपॉइंट पार करें।"],
+  m_race_stealth: ["Огледай {n} адреса тихо. Една звезда — и работата се отменя.","Scout {n} addresses quietly. One star and the job is off.","Осмотри {n} адреса тихо. Одна звезда — и всё отменяется.","悄悄侦察 {n} 个地址。一颗星就取消。","{n}か所を静かに偵察。星ひとつで中止。","{n} पते चुपचाप देखें। एक स्टार और काम रद्द।"],
+  m_wreck: ["Разбий {n} коли{kind}.","Wreck {n} cars{kind}.","Разбей {n} машин{kind}.","摧毁 {n} 辆车{kind}。","車{kind}を{n}台破壊しろ。","{n} कारें{kind} तोड़ें।"],
+  m_fares: ["Вземи такси и направи {n} курса.","Grab a taxi and complete {n} fares.","Возьми такси и сделай {n} заказов.","开出租车完成 {n} 单。","タクシーで{n}回客を運べ。","टैक्सी लेकर {n} सवारी पूरी करें।"],
+  m_crush: ["Смачкай {n} коли в пресата.","Crush {n} cars at the crusher.","Раздави {n} машин на прессе.","在压碎机压毁 {n} 辆车。","クラッシャーで{n}台つぶせ。","क्रशर में {n} कारें कुचलें।"],
+  m_gangkill: ["Свали {n} членове на бандата в квартала им.","Take down {n} gang members in their turf.","Убери {n} членов банды на их территории.","在他们的地盘击倒 {n} 名帮派成员。","縄張りでギャング{n}人を倒せ。","उनके इलाके में {n} गैंग सदस्य गिराएँ।"],
+  m_bomb: ["Занеси бомбата на адреса, въоръжи я и изчезвай.","Deliver the bomb, arm it and get away.","Доставь бомбу, взведи и уходи.","送炸弹到地址，引爆并撤离。","爆弾を届け、起動して離れろ。","बम पहुँचाएँ, चालू करें और निकलें।"],
+  m_chase: ["Настигни бягащата кола{kind} и я спри завинаги.","Chase down the fleeing car{kind} and stop it for good.","Догони беглеца{kind} и останови навсегда.","追上逃跑的车{kind}并彻底拦下。","逃げる車{kind}を追い、止めろ。","भागती कार{kind} पकड़ें और हमेशा के लिए रोकें।"],
+  m_survive: ["Вдигни {w} звезди и издържи {n} секунди без арест.","Reach {w} stars and survive {n} seconds without arrest.","Набери {w} звёзд и продержись {n} секунд без ареста.","达到 {w} 星并存活 {n} 秒不被捕。","星{w}つで{n}秒逮捕されずに生き延びろ。","{w} स्टार पाएँ और {n} सेकंड गिरफ़्तारी से बचें।"],
+  m_army: ["Армията забрави техника. Вземи танк и разбий {n} коли!","The army left hardware behind. Grab a tank and wreck {n} cars!","Армия забыла технику. Бери танк и разбей {n} машин!","军队遗落了装备。开坦克摧毁 {n} 辆车！","軍が装備を置き忘れた。戦車で{n}台破壊！","सेना उपकरण छोड़ गई। टैंक लेकर {n} कारें तोड़ें!"],
+  m_raid: ["Вземи хеликоптера и бомбардирай {n} коли!","Take the helicopter and bomb {n} cars!","Бери вертолёт и разбомби {n} машин!","驾驶直升机轰炸 {n} 辆车！","ヘリで{n}台爆撃しろ！","हेलीकॉप्टर लेकर {n} कारों पर बम गिराएँ!"]
+};
+function detectLang() {
+  const l = (navigator.language || 'en').toLowerCase();
+  for (const k of LANG_ORDER) if (l.startsWith(k)) return k;
+  return 'en';
+}
+let LANG = settings.lang || detectLang();
+function tr(key, p) {
+  const row = I18N[key];
+  let out = row ? (row[LANG_ORDER.indexOf(LANG)] || row[1] || row[0]) : key;
+  if (p) for (const k in p) out = out.split('{' + k + '}').join(p[k]);
+  return out;
+}
+function missionText(m) {
+  const kindName = m.kind ? (CAR_KINDS[m.kind] ? CAR_KINDS[m.kind].name : m.kind) : '';
+  const key = 'm_' + m.type + (m.type === 'race' && m.stealth ? '_stealth' : '');
+  return tr(key, { n: m.goal || 1, kind: kindName ? ' (' + kindName + ')' : '', w: m.wanted || 2 });
+}
+function drawLangMenu() {
+  menuButtons = [];
+  ctx.fillStyle = '#0a0a12'; ctx.fillRect(0, 0, VW, VH);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = 'bold ' + Math.min(48, VW * 0.09) + 'px sans-serif'; ctx.fillStyle = '#ffd23c'; ctx.fillText('GANG CITY', VW / 2, VH * 0.13);
+  const det = detectLang();
+  ctx.font = 'bold 16px sans-serif'; ctx.fillStyle = '#fff';
+  ctx.fillText(tr('chooseLang') + '  ·  Choose your language', VW / 2, VH * 0.13 + 40);
+  ctx.font = '13px sans-serif'; ctx.fillStyle = '#7ee08a';
+  ctx.fillText(I18N.detected[LANG_ORDER.indexOf(det)] + LANGS[det], VW / 2, VH * 0.13 + 64);
+  const cols = VW > VH * 1.1 ? 3 : 2, w = Math.min(200, (VW - 40 - (cols - 1) * 10) / cols), h = clamp(VH * 0.1, 40, 52);
+  const x0 = VW / 2 - (w * cols + 10 * (cols - 1)) / 2, y0 = VH * 0.13 + 90;
+  ctx.font = 'bold 16px sans-serif';
+  LANG_ORDER.forEach((k, i) => menuBtn(LANGS[k] + (k === det ? '  ✓' : ''), x0 + (i % cols) * (w + 10), y0 + Math.floor(i / cols) * (h + 10), w, h, 'lang:' + k, k === det ? 'primary' : ''));
+  ctx.font = '12px sans-serif'; ctx.fillStyle = '#8aa';
+  ctx.fillText(I18N.langHint[LANG_ORDER.indexOf(det)], VW / 2, VH - 24);
+  ctx.textBaseline = 'top';
+}
+
 /* ---------------- Главно меню ---------------- */
 let menuState = 'main', menuButtons = [], resetArmed = 0;
 function hasSave() { try { return !!localStorage.getItem('gangcity_auto'); } catch (e) { return false; } }
@@ -1147,12 +1353,12 @@ function drawMainMenu() {
   ctx.fillText('⭐ ' + rankOf(meta.rankXp).name + '  ·  🚗 ' + meta.collection.length + '/' + Object.keys(CAR_KINDS).length +
     '  ·  🏙 ' + THEMES.filter((t, i) => cityUnlocked(i)).length + '/' + THEMES.length + (net.me ? '  ·  🪙 ' + net.me.gold : ''), VW / 2, VH * 0.2 + 46);
   ctx.font = 'bold 12px sans-serif';
-  menuBtn('✎ ' + (net.nick || 'Избери прякор'), VW / 2 - 80, VH * 0.2 + 62, 160, 26, 'nick');
+  menuBtn('✎ ' + (net.nick || tr('pickNick')), VW / 2 - 80, VH * 0.2 + 62, 160, 26, 'nick');
   // Адаптивно: в пейзаж бутоните са в две колони, така че всичко се побира на екрана
   const sv = hasSave();
   const items = [];
-  if (sv) items.push(['▶  ПРОДЪЛЖИ', 'continue', 'primary']);
-  items.push(['✦  НОВА ИГРА', 'new', sv ? '' : 'primary'], ['🌐  ИГРАЙ ОНЛАЙН', 'online', ''], ['👥  ОБЩНОСТ', 'community', ''], ['🎨  МАГАЗИН', 'shop', ''], ['🏆  КЛАСАЦИЯ', 'board', ''], ['⚙  НАСТРОЙКИ', 'settings', '']);
+  if (sv) items.push([tr('continue'), 'continue', 'primary']);
+  items.push([tr('newGame'), 'new', sv ? '' : 'primary'], [tr('online'), 'online', ''], [tr('community'), 'community', ''], [tr('shop'), 'shop', ''], [tr('board'), 'board', ''], [tr('settings'), 'settings', '']);
   if (!net.me) netMe();
   const cols = VW > VH * 1.25 ? 2 : 1;
   const perCol = Math.ceil(items.length / cols);
@@ -1165,7 +1371,7 @@ function drawMainMenu() {
     const col = cols === 2 ? Math.floor(i / perCol) : 0, row = cols === 2 ? i % perCol : i;
     menuBtn(label, x0 + col * (colW + 20), top + row * (h + gap), colW, h, act, style);
   });
-  if (scoreBest > 0) { ctx.font = '13px sans-serif'; ctx.fillStyle = '#7ee08a'; ctx.textAlign = 'center'; ctx.fillText('Рекорд: ' + fmtMoney(scoreBest), VW / 2, VH - 18); }
+  if (scoreBest > 0) { ctx.font = '13px sans-serif'; ctx.fillStyle = '#7ee08a'; ctx.textAlign = 'center'; ctx.fillText(tr('record') + fmtMoney(scoreBest), VW / 2, VH - 18); }
   ctx.textBaseline = 'top';
 }
 function drawSettingsMenu() {
@@ -1173,11 +1379,11 @@ function drawSettingsMenu() {
   ctx.fillStyle = '#0a0a12'; ctx.fillRect(0, 0, VW, VH);
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.font = 'bold 28px sans-serif'; ctx.fillStyle = '#ffd23c';
-  ctx.fillText('НАСТРОЙКИ', VW / 2, VH * 0.11);
+  ctx.fillText(tr('settingsT'), VW / 2, VH * 0.11);
   const rows = [
-    ['🔊 Звукови ефекти', 'sfx'], ['🎵 Музика', 'music'], ['📳 Вибрация при удар', 'vibro'],
-    ['⚡ Икономичен режим (слаб телефон)', 'lowFx'], ['🕹 По-големи бутони', 'bigCtrl'],
-    ['🚗 Кола: две гъби (завой + газ/спирачка)', 'splitCar'],
+    [tr('sfx'), 'sfx'], [tr('music'), 'music'], [tr('vibro'), 'vibro'],
+    [tr('lowFx'), 'lowFx'], [tr('bigCtrl'), 'bigCtrl'],
+    [tr('splitCar'), 'splitCar'], [tr('lang'), 'lang'],
   ];
   // Адаптивна подредба: в пейзаж — две колони; височината на реда се свива, докато всичко се побере
   const cols = VW > VH * 1.25 ? 2 : 1;
@@ -1200,22 +1406,23 @@ function drawSettingsMenu() {
     ctx.font = fs2 + 'px sans-serif'; ctx.textAlign = 'left'; ctx.fillStyle = '#ddd';
     ctx.fillText(label, x + 10, ry + h / 2);
     ctx.font = 'bold ' + fs2 + 'px sans-serif'; ctx.textAlign = 'right';
-    ctx.fillStyle = settings[key] ? '#7ee08a' : '#888';
-    ctx.fillText(settings[key] ? 'ВКЛ' : 'ИЗКЛ', x + colW - 10, ry + h / 2);
-    menuButtons.push({ x, y: ry, w: colW, h, act: 'toggle:' + key });
+    ctx.fillStyle = key === 'lang' ? '#ffd23c' : settings[key] ? '#7ee08a' : '#888';
+    ctx.fillText(key === 'lang' ? LANGS[LANG] + '  ›' : settings[key] ? tr('on') : tr('off'), x + colW - 10, ry + h / 2);
+    menuButtons.push({ x, y: ry, w: colW, h, act: key === 'lang' ? 'langCycle' : 'toggle:' + key });
     y = Math.max(y, ry + h + gap);
   }
   y += gap;
   const bw = cols === 2 ? colW * 2 + 20 : colW, bx = x0;
   ctx.font = 'bold ' + (fs2 + 1) + 'px sans-serif';
-  menuBtn(resetArmed > 0 ? 'СИГУРЕН ЛИ СИ? Тапни пак' : '🗑 Изтрий целия прогрес', bx, y, bw, h, 'reset', 'danger'); y += h + gap;
-  menuBtn('← НАЗАД', bx, y, bw, h, 'back');
+  menuBtn(resetArmed > 0 ? tr('resetArmed') : tr('reset'), bx, y, bw, h, 'reset', 'danger'); y += h + gap;
+  menuBtn(tr('back'), bx, y, bw, h, 'back');
   ctx.textBaseline = 'top';
 }
 function menuPrimary() { menuTapAct(hasSave() ? 'continue' : 'new'); }
 function menuTapAct(hit) {
   if (hit === 'continue') {
     runLoaded = true;
+    cloudPull().then(pulled => { if (pulled) { const c2 = applyAutoRun(); if (c2 !== null && cityUnlocked(c2) && c2 !== cityIdx) { genCityMap(c2); playerToStart(); spawnWorld(); } } });
     const c = applyAutoRun();
     if (c !== null && cityUnlocked(c) && c !== cityIdx) { genCityMap(c); playerToStart(); spawnWorld(); }
     menuState = 'cities';
@@ -1223,6 +1430,8 @@ function menuTapAct(hit) {
     try { localStorage.removeItem('gangcity_auto'); localStorage.removeItem('gangcity_save'); } catch (e) {}
     restartGame(); runLoaded = true; menuState = 'cities';
   } else if (hit === 'settings') { menuState = 'settings'; resetArmed = 0; }
+  else if (hit.startsWith('lang:')) { LANG = hit.slice(5); settings.lang = LANG; settings.langChosen = true; saveSettings(); menuState = 'main'; }
+  else if (hit === 'langCycle') { LANG = LANG_ORDER[(LANG_ORDER.indexOf(LANG) + 1) % LANG_ORDER.length]; settings.lang = LANG; saveSettings(); }
   else if (hit === 'board') { menuState = 'board'; net.board = null; net.err = null; }
   else if (hit === 'retry') { net.err = null; net.board = null; }
   else if (hit === 'nick') { editNick(); }
@@ -1256,7 +1465,7 @@ function menuTapAct(hit) {
   else if (hit.startsWith('ugcPlay:')) { const u = (social.list || []).find(x => x.code === hit.slice(8)); if (u) playUgc({ title: u.title, author: u.author_nick, code: u.code, def: u.def }); }
   else if (hit.startsWith('ugcLike:')) { socialCall('/ugc/like', { code: hit.slice(8) }, () => { social.list = null; }); }
   else if (hit.startsWith('buy:')) { socialCall('/shop/buy', { item: hit.slice(4) }, r => { net.me = r.me; net.meT = Date.now(); }); }
-  else if (hit.startsWith('equip:')) { const id = hit.slice(6), it = social.shop[id]; const cur = net.me || {}; const badge = it.kind === 'badge' ? id : (cur.items || []).find(i => social.shop[i] && social.shop[i].kind === 'badge' && social.shop[i].value === cur.badge) || ''; const paint = it.kind === 'paint' ? id : (cur.items || []).find(i => social.shop[i] && social.shop[i].kind === 'paint' && social.shop[i].value === cur.paint) || ''; socialCall('/shop/equip', { badge, paint }, r => { net.me = r.me; net.meT = Date.now(); }); }
+  else if (hit.startsWith('equip:')) { const id = hit.slice(6), it = (social.shop || {})[id]; if (!it) return; const cur = net.me || {}; const badge = it.kind === 'badge' ? id : (cur.items || []).find(i => social.shop[i] && social.shop[i].kind === 'badge' && social.shop[i].value === cur.badge) || ''; const paint = it.kind === 'paint' ? id : (cur.items || []).find(i => social.shop[i] && social.shop[i].kind === 'paint' && social.shop[i].value === cur.paint) || ''; socialCall('/shop/equip', { badge, paint }, r => { net.me = r.me; net.meT = Date.now(); }); }
   else if (hit.startsWith('unequip:')) { const kind = hit.slice(8), cur = net.me || {}; const badge = kind === 'badge' ? '' : (cur.items || []).find(i => social.shop[i] && social.shop[i].kind === 'badge' && social.shop[i].value === cur.badge) || ''; const paint = kind === 'paint' ? '' : (cur.items || []).find(i => social.shop[i] && social.shop[i].kind === 'paint' && social.shop[i].value === cur.paint) || ''; socialCall('/shop/equip', { badge, paint }, r => { net.me = r.me; net.meT = Date.now(); }); }
   else if (hit === 'back') { menuState = 'main'; resetArmed = 0; }
   else if (hit.startsWith('toggle:')) { const k = hit.slice(7); settings[k] = !settings[k]; saveSettings(); applySettings(); }
@@ -1329,7 +1538,7 @@ function drawUnlockScreen() {
   const c1 = 1.70158, c3 = c1 + 1;
   const ease = 1 + c3 * Math.pow(k - 1, 3) + c1 * Math.pow(k - 1, 2);   // easeOutBack — "изскача"
   ctx.font = 'bold 15px sans-serif'; ctx.fillStyle = 'rgba(255,255,255,' + k.toFixed(3) + ')';
-  ctx.fillText(u.mode === 'offer' ? '🔓  НОВ ГРАД ОТКЛЮЧЕН' : '🏆  ГРАДЪТ Е ПРЕВЗЕТ · ДОБРЕ ДОШЪЛ В', VW / 2, VH * 0.30);
+  ctx.fillText(u.mode === 'offer' ? tr('unlockedT') : tr('conqueredT'), VW / 2, VH * 0.30);
   ctx.save();
   ctx.translate(VW / 2, VH * 0.42); ctx.scale(Math.max(0.01, ease), Math.max(0.01, ease));
   ctx.font = 'bold ' + Math.min(56, VW * 0.11) + 'px sans-serif'; ctx.fillStyle = '#ffd23c';
@@ -1351,8 +1560,8 @@ function drawUnlockScreen() {
       ctx.fillStyle = primary ? '#ffd23c' : '#ddd'; ctx.fillText(label, x + w / 2, y + h / 2);
       u.btns.push({ x, y, w, h, act });
     };
-    if (u.mode === 'offer') { btn(VW / 2 - bw - 8, bw, 'ОСТАНИ', 'stay', false); btn(VW / 2 + 8, bw, 'ЗАМИНИ  ✈', 'travel', true); }
-    else btn(VW / 2 - bw / 2, bw, 'ПРОДЪЛЖИ', 'close', true);
+    if (u.mode === 'offer') { btn(VW / 2 - bw - 8, bw, tr('stay'), 'stay', false); btn(VW / 2 + 8, bw, tr('travel'), 'travel', true); }
+    else btn(VW / 2 - bw / 2, bw, tr('continueB'), 'close', true);
   }
   ctx.textBaseline = 'top';
 }
@@ -1430,9 +1639,34 @@ function collectCar(kind) {
 }
 /* ---------------- Тих авто-запис на текущата игра ---------------- */
 let runLoaded = false, autoT = 12;
+let cloudT = 0;
+async function cloudPush() {
+  try {
+    await netEnsure();
+    const run = JSON.parse(localStorage.getItem('gangcity_auto') || 'null');
+    if (!run) return;
+    await api('/save', { id: net.id, token: net.token, run, meta });
+  } catch (e) {}
+}
+async function cloudPull() {
+  try {
+    await netEnsure();
+    const r = await api('/load', { id: net.id, token: net.token });
+    if (!r.save) return false;
+    const local = JSON.parse(localStorage.getItem('gangcity_auto') || 'null');
+    const localTs = local && local.ts ? local.ts : 0;
+    if (r.save.updated > localTs + 5000) {
+      localStorage.setItem('gangcity_auto', JSON.stringify(r.save.run));
+      if (r.save.meta && typeof r.save.meta === 'object') { Object.assign(meta, r.save.meta); saveMeta(); }
+      showMsg(tr('cloudPulled'), 3);
+      return true;
+    }
+  } catch (e) {}
+  return false;
+}
 function autosaveRun() {
   try {
-    localStorage.setItem('gangcity_auto', JSON.stringify({
+    localStorage.setItem('gangcity_auto', JSON.stringify({ ts: Date.now(),
       score, lives, level, mult, missionsDone, cityIdx, targetScore, doneMissions: doneMissions.slice(),
       ammo: player.ammo.slice(), weapon: player.weapon, respect: respect.slice()
     }));
@@ -2250,7 +2484,7 @@ function startWithCity(i) {
   if (!cityUnlocked(i)) return;
   if (!runLoaded) {
     runLoaded = true;
-    if (applyAutoRun() !== null) showMsg('Продължаваш от последния запис.', 2.5);
+    if (applyAutoRun() !== null) showMsg(tr('fromSave'), 2.5);
   }
   if (i !== cityIdx) {
     genCityMap(i);
@@ -2261,6 +2495,7 @@ function startWithCity(i) {
   AudioSys.init();
   MusicSys.start();
   if (pendingUgc) { const u = pendingUgc; pendingUgc = null; setTimeout(() => startCustomMission(u), 400); }
+  tutStart();
 }
 let message = null, messageT = 0;
 let scoreBest = 0;
@@ -3066,7 +3301,7 @@ function startMission() {
   const idx = pick.idx, cycle = pick.cycle;
   mission.tableIdx = idx;
   const m = MISSION_TABLE[idx];
-  mission.type = m.type; mission.text = m.txt;
+  mission.type = m.type; mission.text = LANG === 'bg' ? m.txt : missionText(m);
   mission.reward = Math.floor(m.reward * (1 + cycle * 0.25));
   mission.timer = m.timer || 120;
   mission.count = 0; mission.goal = m.goal || 0;
@@ -3100,7 +3335,7 @@ function endMission(win) {
     { const nl = CITY_REQ.findIndex((r, i) => i > 0 && r === meta.metaMissions); if (nl > 0) openUnlockScreen(nl, 'offer'); }
     addRankXp(15);
     dailyProgress('missions', 1);
-    autosaveRun();
+    autosaveRun(); cloudPush();
     netSubmit();
     netGold('mission');
     if (mission.tableIdx != null) netMission(mission.tableIdx, Math.max(1, Math.round(gameT - (mission.startedAt || gameT))));
@@ -3181,7 +3416,7 @@ function updateMission(dt) {
     for (const p of alive) { const d = dist2(p.x, p.y, player.x, player.y); if (d < bd) { bd = d; best = p; } }
     mission.target = best;
   } else if (mission.type === 'chase') {
-    if (mission.target.dead) endMission(true);
+    if (!mission.target || mission.target.dead) endMission(true);
   } else if (mission.type === 'survive') {
     if (player.wanted >= mission.needWanted) {
       mission.surv += dt;
@@ -3316,7 +3551,7 @@ function touchStart(e) {
     menuTap(t0.clientX, t0.clientY);
     return;
   }
-  if (MP.results) { MP.closeResults(); return; }
+  if (MP.results && MP.active) { MP.closeResults(); return; }
   if (unlockScreen) { const t0 = e.changedTouches[0]; unlockTap(t0.clientX, t0.clientY); return; }
   if (gameOver) { restartGame(); return; }
   for (const t of e.changedTouches) {
@@ -4366,7 +4601,7 @@ function restartGame() {
   mission.cooldown = 3;
   const savedCity = applyAutoRun();
   let city = (savedCity !== null && cityUnlocked(savedCity)) ? savedCity : 0;
-  if (savedCity !== null) showMsg('Продължаваш от последния запис.', 3);
+  if (savedCity !== null) showMsg(tr('fromSave'), 3);
   genCityMap(city);
   playerToStart();
   spawnWorld();
@@ -6088,6 +6323,7 @@ function drawHUD() {
   // Тъч контроли
   if (IS_TOUCH && !gameOver) drawTouchControls();
   MP.drawHud();
+  tutDraw();
   if (unlockScreen) drawUnlockScreen();
 }
 function bigCenterText(txt, color) {
@@ -6147,6 +6383,7 @@ function drawTouchControls() {
 }
 
 function drawStartScreen() {
+  if (!settings.langChosen) { drawLangMenu(); return; }
   if (menuState === 'main') { drawMainMenu(); return; }
   if (menuState === 'settings') { drawSettingsMenu(); return; }
   if (menuState === 'board') { drawBoardMenu(); return; }
@@ -6166,7 +6403,7 @@ function drawStartScreen() {
   ctx.fillStyle = '#ffd23c';
   ctx.fillText('GANG CITY', VW / 2, VH * 0.22);
   ctx.font = 'bold 13px sans-serif';
-  menuBtn('← Меню', 12, 12, 90, 30, 'back');
+  menuBtn(tr('menu'), 12, 12, 90, 30, 'back');
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   // Избор на начален град — редове с бутони
   startCityButtons = [];
@@ -6229,7 +6466,7 @@ function drawStartScreen() {
   lines.forEach((l, i) => ctx.fillText(l, VW / 2, VH * 0.5 + i * 22));
   if (scoreBest > 0) {
     ctx.fillStyle = '#7ee08a';
-    ctx.fillText('Рекорд: ' + fmtMoney(scoreBest), VW / 2, VH * 0.5 + lines.length * 22 + 16);
+    ctx.fillText(tr('record') + fmtMoney(scoreBest), VW / 2, VH * 0.5 + lines.length * 22 + 16);
   }
   // Постоянният прогрес: ранг, колекция, дневна задача, следващо отключване
   ensureDaily();
@@ -6255,6 +6492,16 @@ function drawStartScreen() {
 // ---------------- Главен цикъл ----------------
 let lastT = performance.now();
 let fpsEMA = 60;
+let perfAcc = 0, perfN = 0, perfBad = 0;
+function perfTick(dt) {
+  if (settings.lowFx || !started) return;
+  perfAcc += dt; perfN++;
+  if (perfAcc >= 1) {
+    const fps = perfN / perfAcc; perfAcc = 0; perfN = 0;
+    perfBad = fps < 38 ? perfBad + 1 : 0;
+    if (perfBad >= 6) { settings.lowFx = true; saveSettings(); showMsg(tr('autoLow'), 3.5); perfBad = 0; }
+  }
+}
 function frame(now) {
   requestAnimationFrame(frame);
   let dt = (now - lastT) / 1000;
@@ -6297,8 +6544,10 @@ function frame(now) {
     updateTaxi(dt);
     AdBridge.update();
     MP.update(dt);
+    tutUpdate(dt);
+    perfTick(dt);
     autoT -= dt;
-    if (autoT <= 0) { autoT = 12; if (started && !gameOver && !player.dead && !MP.active) autosaveRun(); }
+    if (autoT <= 0) { autoT = 12; if (started && !gameOver && !player.dead && !MP.active) { autosaveRun(); cloudT += 12; if (cloudT >= 60) { cloudT = 0; cloudPush(); } } }
     {
       const z = gangAt(player.x);
       if (z !== gangZoneLast && gameT - (window._zoneMsgT || -99) > 6) {
