@@ -23,6 +23,7 @@ const DIR_ANG = [0, Math.PI / 2, Math.PI, -Math.PI / 2];
 // ---------------- Помощни ----------------
 let seed = 20977;
 function rnd() { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; }
+if (typeof window.GCT !== 'function') window.GCT = (x) => x;
 let R = Math.random;
 function mulberry32(a) {
   return function () {
@@ -132,64 +133,64 @@ function blockKeyOf(tx, ty) { return Math.floor(tx / BLOCK) + ',' + Math.floor(t
 // Градове: София (по действителния център) + класическата тройка
 const THEMES = [
   {
-    name: 'София',
+    name: GCT('София'),
     cast: 'rgb(255,240,214)', glow: '255,210,60', nightBias: 0, rainBias: 1, payMult: 1, heatMult: 1,
-    tagline: 'Домът. Тук започва всичко.', starCar: 'sport',
+    tagline: GCT('Домът. Тук започва всичко.'), starCar: 'sport',
     sofia: true,
     walls: ['#d9c9a9', '#e6dcc6', '#c9b998', '#b3a890', '#d3c3b3', '#e2d2ba', '#cfc0a4', '#bfae94'],
     roofs: ['#9a5f48', '#a86a50', '#8a6a55', '#7a7068', '#96604a'],
     road: ['#3c3c42', '#3f3f45'], side: ['#aaa294', '#afa799'],
     park: ['#42703c', '#467440'], water: '#2a5a74', grass: '#5c7448',
     lane: '#d8d4c8', parkChance: 0.18, palm: false, metro: '#2a6db5',
-    stations: ['Лъвов мост', 'СУ Кл. Охридски', 'НДК', 'Опълченска'],
-    streetsH: ['ул. Козлодуй', 'бул. Сливница', 'бул. Тодор Александров', 'бул. Цар Освободител', 'ул. Граф Игнатиев', 'бул. Патриарх Евтимий', 'бул. България', 'бул. Гоце Делчев'],
-    streetsV: ['бул. К. Величков', 'бул. Опълченска', 'бул. Мария Луиза', 'бул. Витоша', 'ул. Г. С. Раковски', 'бул. Васил Левски', 'бул. Евлоги Георгиев', 'бул. Цариградско шосе']
+    stations: [GCT('Лъвов мост'), GCT('СУ Кл. Охридски'), GCT('НДК'), GCT('Опълченска')],
+    streetsH: [GCT('ул. Козлодуй'), GCT('бул. Сливница'), GCT('бул. Тодор Александров'), GCT('бул. Цар Освободител'), GCT('ул. Граф Игнатиев'), GCT('бул. Патриарх Евтимий'), GCT('бул. България'), GCT('бул. Гоце Делчев')],
+    streetsV: [GCT('бул. К. Величков'), GCT('бул. Опълченска'), GCT('бул. Мария Луиза'), GCT('бул. Витоша'), GCT('ул. Г. С. Раковски'), GCT('бул. Васил Левски'), GCT('бул. Евлоги Георгиев'), GCT('бул. Цариградско шосе')]
   },
   {
-    name: 'Русе',
+    name: GCT('Русе'),
     cast: 'rgb(214,240,208)', glow: '120,220,140', nightBias: 0, rainBias: 1.6, payMult: 1.25, heatMult: 1.1,
-    tagline: 'Дунавът е влажен, но плаща добре.', starCar: 'cabrio',
+    tagline: GCT('Дунавът е влажен, но плаща добре.'), starCar: 'cabrio',
     ruse: true, freeform: true, lowRise: true,
     walls: ['#e9dfc8', '#dcc9a5', '#e6d6b8', '#d3bb93', '#eae3d3', '#cbb79b', '#e0d2be', '#d8c2a2', '#f0e8d8', '#c4ae8e'],
     roofs: ['#a1573e', '#95513a', '#8a5a46', '#7d6c5a', '#9a6248'],
     road: ['#3d3d43', '#404046'], side: ['#b6ae9e', '#bbb3a3'],
     park: ['#477a40', '#4b7e44'], water: '#38678a', grass: '#61794c',
     lane: '#e2ded2', parkChance: 0, palm: false, metro: '#2a7a4a',
-    stations: ['Пл. Батенберг', 'Операта', 'Борисова', 'Кеят'],
-    streetNames: ['бул. Придунавски', 'ул. Княжеска', 'ул. Александровска', 'ул. Хан Аспарух', 'бул. Ген. Скобелев', 'бул. Цар Фердинанд', 'ул. Ангел Кънчев', 'бул. Цар Освободител', 'ул. Църковна независимост', 'ул. Муткурова', 'ул. Петко Д. Петков', 'ул. Стефан Караджа', 'ул. Борисова']
+    stations: [GCT('Пл. Батенберг'), GCT('Операта'), GCT('Борисова'), GCT('Кеят')],
+    streetNames: [GCT('бул. Придунавски'), GCT('ул. Княжеска'), GCT('ул. Александровска'), GCT('ул. Хан Аспарух'), GCT('бул. Ген. Скобелев'), GCT('бул. Цар Фердинанд'), GCT('ул. Ангел Кънчев'), GCT('бул. Цар Освободител'), GCT('ул. Църковна независимост'), GCT('ул. Муткурова'), GCT('ул. Петко Д. Петков'), GCT('ул. Стефан Караджа'), GCT('ул. Борисова')]
   },
   {
-    name: 'Стоманград',
+    name: GCT('Стоманград'),
     cast: 'rgb(196,208,226)', glow: '130,170,230', nightBias: 0.35, rainBias: 1.3, payMult: 1.5, heatMult: 1.25,
-    tagline: 'Град без слънце. Но с много пари.', starCar: 'volta',
+    tagline: GCT('Град без слънце. Но с много пари.'), starCar: 'volta',
     walls: ['#9a7b64', '#8b8d99', '#ab9070', '#7d8c78', '#997f9e', '#b09a80', '#82909f', '#a58474', '#c0aa8a', '#6f7f8f'],
     roofs: ['#6e6a66', '#7a7672', '#5f6468', '#746e64', '#686e62', '#7e7468'],
     road: ['#3a3a40', '#3d3d43'], side: ['#95959c', '#9a9aa1'],
     park: ['#3e6b3a', '#42703e'], water: '#173352', grass: '#4c6b46',
     lane: '#c9b23c', parkChance: 0.16, palm: false, metro: '#3a6ea8',
-    stations: ['Север', 'Изток', 'Юг', 'Запад']
+    stations: [GCT('Север'), GCT('Изток'), GCT('Юг'), GCT('Запад')]
   },
   {
-    name: 'Сан Прахос',
+    name: GCT('Сан Прахос'),
     cast: 'rgb(255,214,178)', glow: '255,150,70', nightBias: -0.35, rainBias: 0.15, payMult: 1.75, heatMult: 1.4,
-    tagline: 'Пек, прах и суперколи.', starCar: 'toro',
+    tagline: GCT('Пек, прах и суперколи.'), starCar: 'toro',
     walls: ['#e8ccb8', '#d4e0c4', '#f0e2c4', '#c4d8e4', '#e4c8d8', '#f0d2a8', '#d6cab2', '#b8d0c2', '#f4e8d0', '#ccb8a0'],
     roofs: ['#a89078', '#98a088', '#b0a080', '#8a9aa4', '#a4988a', '#9aa48a'],
     road: ['#46464c', '#49494f'], side: ['#b2aa9a', '#b7afa0'],
     park: ['#5c7c3c', '#617f40'], water: '#1d5a78', grass: '#6c7c48',
     lane: '#e8e4d8', parkChance: 0.22, palm: true, metro: '#c03830',
-    stations: ['Север', 'Изток', 'Юг', 'Запад']
+    stations: [GCT('Север'), GCT('Изток'), GCT('Юг'), GCT('Запад')]
   },
   {
-    name: 'Вайб Сити',
+    name: GCT('Вайб Сити'),
     cast: 'rgb(244,196,226)', glow: '255,110,200', nightBias: 0.5, rainBias: 1.2, payMult: 2, heatMult: 1.6,
-    tagline: 'Неон, дъжд и Кавало. Върхът.', starCar: 'cavallo',
+    tagline: GCT('Неон, дъжд и Кавало. Върхът.'), starCar: 'cavallo',
     walls: ['#e8a8c0', '#a8d8d0', '#f0d8b0', '#c4b0e0', '#f0b8a8', '#b8e0f0', '#e8e0d0', '#d8b8d8', '#f8d0c8', '#b0c8e8'],
     roofs: ['#95788a', '#7a8a92', '#a08a92', '#8a927a', '#928a9a'],
     road: ['#3e3a42', '#413d45'], side: ['#c2b2a2', '#c7b7a7'],
     park: ['#4a7a4c', '#4e7e50'], water: '#0e6080', grass: '#5c7a52',
     lane: '#f0c0d0', parkChance: 0.2, palm: true, metro: '#20a8a0',
-    stations: ['Север', 'Изток', 'Юг', 'Запад']
+    stations: [GCT('Север'), GCT('Изток'), GCT('Юг'), GCT('Запад')]
   }
 ];
 // Специални слоеве на картата
@@ -213,8 +214,8 @@ let crusherDoor = null, churchDoor = null;
 let crusherCd = 0, churchCd = 0;
 const taxiJob = { fare: null, dest: null, t: 0, pay: 0, offCd: 0 };
 const GANGS = [
-  { name: 'Западните', color: '#3a6fb5' },
-  { name: 'Източните', color: '#b53a3a' },
+  { name: GCT('Западните'), color: '#3a6fb5' },
+  { name: GCT('Източните'), color: '#b53a3a' },
 ];
 const respect = [0, 0];   // -100..100 за всяка банда
 let gangZoneLast = -2;
@@ -242,8 +243,8 @@ const AdBridge = {
       document.body.appendChild(b);
       return b;
     };
-    this.btnBribe = mk('📺 Реклама → чисто досие', 150);
-    this.btnRevive = mk('📺 Реклама → запази оръжията', 110);
+    this.btnBribe = mk(GCT('📺 Реклама → чисто досие'), 150);
+    this.btnRevive = mk(GCT('📺 Реклама → запази оръжията'), 110);
     const bind = (btn, hook) => {
       btn.addEventListener('touchstart', (e) => { e.preventDefault(); this.show(hook); }, { passive: false });
       btn.addEventListener('mousedown', () => this.show(hook));
@@ -263,10 +264,10 @@ const AdBridge = {
 window.onAdReward = function (hook) {
   if (hook === 'bribe') {
     player.heat = 0; recalcWanted();
-    showMsg('💵 Рекламата плати подкупа. Досието е чисто.', 2.5);
+    showMsg(GCT('💵 Рекламата плати подкупа. Досието е чисто.'), 2.5);
   } else if (hook === 'revive') {
     adKeepWeapons = true;
-    showMsg('Оръжията ще те чакат след болницата.', 2.5);
+    showMsg(GCT('Оръжията ще те чакат след болницата.'), 2.5);
   }
 };
 
@@ -323,13 +324,13 @@ async function netMe(force) {
   return net.me;
 }
 async function netGold(kind) {
-  try { await netEnsure(); const r = await api('/gold/event', { id: net.id, token: net.token, kind }); if (net.me) { if (r.gold > net.me.gold) showMsg('🪙 +' + (r.gold - net.me.gold) + ' злато', 2); net.me.gold = r.gold; } } catch (e) {}
+  try { await netEnsure(); const r = await api('/gold/event', { id: net.id, token: net.token, kind }); if (net.me) { if (r.gold > net.me.gold) showMsg('🪙 +' + (r.gold - net.me.gold) + GCT(' злато'), 2); net.me.gold = r.gold; } } catch (e) {}
 }
 async function netUgcPlay(code, win) { try { await netEnsure(); await api('/ugc/play', { id: net.id, token: net.token, code, win }); } catch (e) {} }
 const social = { tab: 'new', list: null, busy: false, err: null, shop: null, crew: null, crewTop: null, friends: null,
   def: { type: 'wreck', goal: 3, timer: 120, kind: null, wanted: 2, stealth: false, txt: '' }, title: '', savedCode: null };
 const UGC_BASE = { deliver: 60, hit: 70, race: 40, wreck: 45, crush: 60, fares: 55, survive: 30, bomb: 90, chase: 100 };
-const UGC_LABEL = { deliver: 'Кражба на кола', hit: 'Удар', race: 'Гонка', wreck: 'Разбиване', crush: 'Преса', fares: 'Такси', survive: 'Оцеляване', bomb: 'Бомба', chase: 'Преследване' };
+const UGC_LABEL = { deliver: GCT('Кражба на кола'), hit: GCT('Удар'), race: GCT('Гонка'), wreck: GCT('Разбиване'), crush: GCT('Преса'), fares: GCT('Такси'), survive: GCT('Оцеляване'), bomb: GCT('Бомба'), chase: GCT('Преследване') };
 const UGC_KINDS = [null, 'taxi', 'sport', 'police', 'toro', 'cavallo', 'volta', 'cabrio', 'bus'];
 function ugcReward(d) { return Math.min(6000, UGC_BASE[d.type] * d.goal * (d.stealth ? 1.3 : 1) * (d.kind ? 1.2 : 1) * 4) | 0; }
 async function socialCall(path, body, after) {
@@ -348,7 +349,7 @@ function askText(label, initial, cb, opts) {
   inp.style.cssText = 'font-size:17px;padding:10px 12px;border-radius:6px;border:1px solid #ffd23c;background:#111;color:#fff;width:min(86vw,340px);text-align:' + (opts.upper ? 'center;text-transform:uppercase;letter-spacing:4px;font-family:monospace' : 'left') + (opts.multi ? ';height:90px' : '');
   const row = document.createElement('div'); row.style.cssText = 'display:flex;gap:10px';
   const mk = (t, bg) => { const b = document.createElement('div'); b.textContent = t; b.style.cssText = 'padding:10px 18px;border-radius:6px;font-weight:700;background:' + bg + ';color:#111;touch-action:none'; return b; };
-  const ok = mk(opts.okLabel || 'Запази', '#ffd23c'), no = mk('Отказ', '#888');
+  const ok = mk(opts.okLabel || GCT('Запази'), '#ffd23c'), no = mk(GCT('Отказ'), '#888');
   const msg = document.createElement('div'); msg.style.cssText = 'color:#e08080;font-size:13px;min-height:16px';
   row.append(ok, no); wrap.append(lbl, inp, row, msg); document.body.appendChild(wrap);
   setTimeout(() => inp.focus(), 50);
@@ -358,7 +359,7 @@ function askText(label, initial, cb, opts) {
   if (!opts.multi) inp.onkeydown = (e) => { if (e.key === 'Enter') ok.onpointerdown(); };
 }
 function crewTag() { return net.me && net.me.crew ? '[' + net.me.crew.name.replace(/\s+/g, '').slice(0, 4).toUpperCase() + '] ' : ''; }
-function myDisplayNick() { return crewTag() + (net.me && net.me.badge ? net.me.badge : '') + (net.nick || 'Гангстер'); }
+function myDisplayNick() { return crewTag() + (net.me && net.me.badge ? net.me.badge : '') + (net.nick || GCT('Гангстер')); }
 
 /* ---- Екран: Общност ---- */
 function drawCommunityMenu() {
@@ -367,7 +368,7 @@ function drawCommunityMenu() {
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.font = 'bold 26px sans-serif'; ctx.fillStyle = '#ffd23c'; ctx.fillText(tr('commT'), VW / 2, VH * 0.12);
   ctx.font = '13px sans-serif'; ctx.fillStyle = '#8aa';
-  ctx.fillText('Бандата те чака. Приятелите те викат. Мисиите ги пишат играчите.', VW / 2, VH * 0.12 + 26);
+  ctx.fillText(GCT('Бандата те чака. Приятелите те викат. Мисиите ги пишат играчите.'), VW / 2, VH * 0.12 + 26);
   const w = Math.min(320, VW - 60), h = clamp(VH * 0.11, 40, 50), x = VW / 2 - w / 2;
   let y = VH * 0.3;
   ctx.font = 'bold 16px sans-serif';
@@ -385,19 +386,19 @@ function drawCrewMenu() {
   const me = net.me, crew = me && me.crew;
   const w = Math.min(420, VW - 30), x = VW / 2 - w / 2;
   if (!crew) {
-    ctx.font = 'bold 24px sans-serif'; ctx.fillStyle = '#ffd23c'; ctx.fillText('🏴 БАНДИ', VW / 2, VH * 0.1);
-    ctx.font = '13px sans-serif'; ctx.fillStyle = '#8aa'; ctx.fillText('Създай своя или влез с код от приятел. Общата класация е по общи пари.', VW / 2, VH * 0.1 + 26);
+    ctx.font = 'bold 24px sans-serif'; ctx.fillStyle = '#ffd23c'; ctx.fillText(GCT('🏴 БАНДИ'), VW / 2, VH * 0.1);
+    ctx.font = '13px sans-serif'; ctx.fillStyle = '#8aa'; ctx.fillText(GCT('Създай своя или влез с код от приятел. Общата класация е по общи пари.'), VW / 2, VH * 0.1 + 26);
     let y = VH * 0.25;
     ctx.font = 'bold 14px sans-serif';
-    menuBtn('➕  СЪЗДАЙ БАНДА', x, y, w / 2 - 5, 40, 'crewCreate', 'primary');
+    menuBtn(GCT('➕  СЪЗДАЙ БАНДА'), x, y, w / 2 - 5, 40, 'crewCreate', 'primary');
     menuBtn(tr('joinCode'), x + w / 2 + 5, y, w / 2 - 5, 40, 'crewJoin'); y += 52;
     if (!social.crewTop && !social.busy) socialCall('/crew/top', null, r => { social.crewTop = r.top; }) ;
-    ctx.textAlign = 'left'; ctx.font = 'bold 12px sans-serif'; ctx.fillStyle = '#8aa'; ctx.fillText('ТОП БАНДИ', x, y + 6); y += 18;
+    ctx.textAlign = 'left'; ctx.font = 'bold 12px sans-serif'; ctx.fillStyle = '#8aa'; ctx.fillText(GCT('ТОП БАНДИ'), x, y + 6); y += 18;
     ctx.font = '13px sans-serif';
     for (const c of (social.crewTop || []).slice(0, 8)) {
       ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fillRect(x, y, w, 24);
       ctx.fillStyle = c.color; ctx.fillRect(x, y, 5, 24);
-      ctx.textAlign = 'left'; ctx.fillStyle = '#ddd'; ctx.fillText(c.name + '  · ' + c.members + ' души', x + 12, y + 12);
+      ctx.textAlign = 'left'; ctx.fillStyle = '#ddd'; ctx.fillText(c.name + '  · ' + c.members + GCT(' души'), x + 12, y + 12);
       ctx.textAlign = 'right'; ctx.fillStyle = '#7ee08a'; ctx.fillText(fmtMoney(c.total), x + w - 8, y + 12);
       y += 27;
     }
@@ -406,11 +407,11 @@ function drawCrewMenu() {
     ctx.fillStyle = crew.color; ctx.fillRect(0, 0, VW, 6);
     ctx.font = 'bold 26px sans-serif'; ctx.fillStyle = '#ffd23c'; ctx.fillText('🏴 ' + crew.name, VW / 2, VH * 0.1);
     ctx.font = '13px sans-serif'; ctx.fillStyle = '#8aa';
-    ctx.fillText('Код за покана: ' + crew.id + (social.crew ? '  ·  общо ' + fmtMoney(social.crew.total) : ''), VW / 2, VH * 0.1 + 26);
+    ctx.fillText(GCT('Код за покана: ') + crew.id + (social.crew ? GCT('  ·  общо ') + fmtMoney(social.crew.total) : ''), VW / 2, VH * 0.1 + 26);
     let y = VH * 0.22;
     ctx.font = 'bold 13px sans-serif';
-    menuBtn('📤 Сподели кода', x, y, w / 2 - 5, 32, 'crewShare');
-    menuBtn('🚪 Напусни', x + w / 2 + 5, y, w / 2 - 5, 32, 'crewLeave', 'danger'); y += 44;
+    menuBtn(GCT('📤 Сподели кода'), x, y, w / 2 - 5, 32, 'crewShare');
+    menuBtn(GCT('🚪 Напусни'), x + w / 2 + 5, y, w / 2 - 5, 32, 'crewLeave', 'danger'); y += 44;
     const rowH = clamp((VH - y - 60) / 10, 20, 27);
     ctx.font = (rowH < 24 ? 12 : 13) + 'px sans-serif';
     for (const m of (social.crew ? social.crew.members : []).slice(0, 12)) {
@@ -432,27 +433,27 @@ function drawFriendsMenu() {
   ctx.fillStyle = '#0a0a12'; ctx.fillRect(0, 0, VW, VH);
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   const w = Math.min(420, VW - 30), x = VW / 2 - w / 2;
-  ctx.font = 'bold 24px sans-serif'; ctx.fillStyle = '#ffd23c'; ctx.fillText('👥 ПРИЯТЕЛИ', VW / 2, VH * 0.09);
+  ctx.font = 'bold 24px sans-serif'; ctx.fillStyle = '#ffd23c'; ctx.fillText(GCT('👥 ПРИЯТЕЛИ'), VW / 2, VH * 0.09);
   ctx.font = '13px sans-serif'; ctx.fillStyle = '#8aa';
-  ctx.fillText('Твоят код: ' + (net.me ? net.me.fcode : '...') + '  — дай го на приятел, за да те добави', VW / 2, VH * 0.09 + 24);
+  ctx.fillText(GCT('Твоят код: ') + (net.me ? net.me.fcode : '...') + GCT('  — дай го на приятел, за да те добави'), VW / 2, VH * 0.09 + 24);
   if (!social.friends && !social.busy) socialCall('/friends/list', null, r => { social.friends = r.friends; });
   if (Date.now() - (social.friendsT || 0) > 6000) { social.friendsT = Date.now(); socialCall('/friends/list', null, r => { social.friends = r.friends; }); }
   let y = VH * 0.2;
   ctx.font = 'bold 13px sans-serif';
-  menuBtn('📤 Сподели кода', x, y, w / 2 - 5, 32, 'fcodeShare');
-  menuBtn('➕ Добави по код', x + w / 2 + 5, y, w / 2 - 5, 32, 'friendAdd', 'primary'); y += 44;
+  menuBtn(GCT('📤 Сподели кода'), x, y, w / 2 - 5, 32, 'fcodeShare');
+  menuBtn(GCT('➕ Добави по код'), x + w / 2 + 5, y, w / 2 - 5, 32, 'friendAdd', 'primary'); y += 44;
   const rowH = clamp((VH - y - 60) / 8, 26, 34);
   ctx.font = (rowH < 30 ? 12 : 13) + 'px sans-serif';
   const list = social.friends || [];
-  if (!list.length) { ctx.textAlign = 'center'; ctx.fillStyle = '#666'; ctx.fillText('Още нямаш приятели тук. Размени си кодовете.', VW / 2, y + 20); }
+  if (!list.length) { ctx.textAlign = 'center'; ctx.fillStyle = '#666'; ctx.fillText(GCT('Още нямаш приятели тук. Размени си кодовете.'), VW / 2, y + 20); }
   for (const f of list.slice(0, 10)) {
     ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fillRect(x, y, w, rowH - 3);
     ctx.textAlign = 'left'; ctx.fillStyle = f.online ? '#7ee08a' : '#666'; ctx.fillText('●', x + 8, y + rowH / 2 - 1);
     ctx.fillStyle = '#ddd'; ctx.fillText((f.badge || '') + f.nick, x + 24, y + rowH / 2 - 1);
-    let where = f.online ? (f.room ? (f.room.kind === 'pub' ? 'играе в ' + (f.room.code === 'ruse' ? tr('lRuse') : tr('lSofia')) : 'в частна игра') : 'в менюто') : 'офлайн';
+    let where = f.online ? (f.room ? (f.room.kind === 'pub' ? GCT('играе в ') + (f.room.code === 'ruse' ? tr('lRuse') : tr('lSofia')) : GCT('в частна игра')) : GCT('в менюто')) : GCT('офлайн');
     ctx.fillStyle = f.online ? '#9fc4d8' : '#555'; ctx.font = '11px sans-serif'; ctx.fillText(where, x + 24 + ctx.measureText((f.badge || '') + f.nick).width + 40, y + rowH / 2 - 1);
     ctx.font = (rowH < 30 ? 12 : 13) + 'px sans-serif';
-    if (f.online && f.room) { ctx.font = 'bold 12px sans-serif'; menuBtn('▶ Отиди', x + w - 84, y + 2, 78, rowH - 7, 'goto:' + f.room.kind + ':' + f.room.code); ctx.font = (rowH < 30 ? 12 : 13) + 'px sans-serif'; }
+    if (f.online && f.room) { ctx.font = 'bold 12px sans-serif'; menuBtn(GCT('▶ Отиди'), x + w - 84, y + 2, 78, rowH - 7, 'goto:' + f.room.kind + ':' + f.room.code); ctx.font = (rowH < 30 ? 12 : 13) + 'px sans-serif'; }
     y += rowH;
   }
   if (social.err) { ctx.textAlign = 'center'; ctx.fillStyle = '#e08080'; ctx.font = '13px sans-serif'; ctx.fillText(social.err, VW / 2, VH - 60); }
@@ -466,18 +467,18 @@ function drawCreatorMenu() {
   ctx.fillStyle = '#0a0a12'; ctx.fillRect(0, 0, VW, VH);
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   const w = Math.min(460, VW - 24), x = VW / 2 - w / 2;
-  ctx.font = 'bold 22px sans-serif'; ctx.fillStyle = '#ffd23c'; ctx.fillText('🛠 КОНСТРУКТОР НА МИСИИ', VW / 2, VH * 0.07);
+  ctx.font = 'bold 22px sans-serif'; ctx.fillStyle = '#ffd23c'; ctx.fillText(GCT('🛠 КОНСТРУКТОР НА МИСИИ'), VW / 2, VH * 0.07);
   let y = VH * 0.07 + 24;
   ctx.font = 'bold 12px sans-serif';
-  const tabs = [['new', 'НОВА'], ['mine', 'МОИТЕ'], ['top', 'ПОПУЛЯРНИ']];
+  const tabs = [['new', GCT('НОВА')], ['mine', GCT('МОИТЕ')], ['top', GCT('ПОПУЛЯРНИ')]];
   tabs.forEach(([id, label], i) => menuBtn(label, x + i * (w / 3), y, w / 3 - 4, 28, 'tab:' + id, social.tab === id ? 'primary' : ''));
   y += 38;
   const d = social.def;
   if (social.tab === 'new') {
-    const rows = [['Тип', 'type', UGC_LABEL[d.type]], ['Цел', 'goal', String(d.goal)], ['Време', 'timer', d.timer + ' сек']];
-    if (['deliver', 'chase', 'wreck'].includes(d.type)) rows.push(['Модел кола', 'kind', d.kind ? (CAR_KINDS[d.kind] ? CAR_KINDS[d.kind].name : d.kind) : 'Който и да е']);
-    if (d.type === 'survive') rows.push(['Звезди', 'wanted', '★'.repeat(d.wanted)]);
-    if (d.type === 'race') rows.push(['Тихо (без звезди)', 'stealth', d.stealth ? 'Да' : 'Не']);
+    const rows = [[GCT('Тип'), 'type', UGC_LABEL[d.type]], [GCT('Цел'), 'goal', String(d.goal)], [GCT('Време'), 'timer', d.timer + GCT(' сек')]];
+    if (['deliver', 'chase', 'wreck'].includes(d.type)) rows.push([GCT('Модел кола'), 'kind', d.kind ? (CAR_KINDS[d.kind] ? CAR_KINDS[d.kind].name : d.kind) : GCT('Който и да е')]);
+    if (d.type === 'survive') rows.push([GCT('Звезди'), 'wanted', '★'.repeat(d.wanted)]);
+    if (d.type === 'race') rows.push([GCT('Тихо (без звезди)'), 'stealth', d.stealth ? GCT('Да') : GCT('Не')]);
     const rh = clamp((VH - y - 130) / (rows.length + 2), 22, 30);
     ctx.font = (rh < 26 ? 12 : 13) + 'px sans-serif';
     for (const [label, key, val] of rows) {
@@ -489,28 +490,28 @@ function drawCreatorMenu() {
       y += rh + 4;
     }
     ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fillRect(x, y, w, rh);
-    ctx.textAlign = 'left'; ctx.fillStyle = social.title ? '#fff' : '#777'; ctx.fillText('📝 ' + (social.title || 'Заглавие...') + (d.txt ? ' — ' + d.txt.slice(0, 40) : ''), x + 8, y + rh / 2);
+    ctx.textAlign = 'left'; ctx.fillStyle = social.title ? '#fff' : '#777'; ctx.fillText('📝 ' + (social.title || GCT('Заглавие...')) + (d.txt ? ' — ' + d.txt.slice(0, 40) : ''), x + 8, y + rh / 2);
     menuButtons.push({ x, y, w, h: rh, act: 'ugc:text' });
     y += rh + 8;
     ctx.textAlign = 'center'; ctx.fillStyle = '#7ee08a'; ctx.font = 'bold 13px sans-serif';
-    ctx.fillText('Награда за играча: ' + fmtMoney(ugcReward(d)) + '  ·  ти печелиш 🪙 1 злато на всяко успешно изиграване', VW / 2, y + 8); y += 26;
-    if (social.savedCode) { ctx.fillStyle = '#ffd23c'; ctx.font = 'bold 15px sans-serif'; ctx.fillText('✓ Запазена! Код: ' + social.savedCode, VW / 2, y + 8); y += 26; }
+    ctx.fillText(GCT('Награда за играча: ') + fmtMoney(ugcReward(d)) + GCT('  ·  ти печелиш 🪙 1 злато на всяко успешно изиграване'), VW / 2, y + 8); y += 26;
+    if (social.savedCode) { ctx.fillStyle = '#ffd23c'; ctx.font = 'bold 15px sans-serif'; ctx.fillText(GCT('✓ Запазена! Код: ') + social.savedCode, VW / 2, y + 8); y += 26; }
     ctx.font = 'bold 14px sans-serif';
-    menuBtn(social.busy ? '...' : '💾 ЗАПАЗИ И СПОДЕЛИ', x, y, w / 2 - 5, 36, 'ugcSave', 'primary');
-    menuBtn('▶ ПРОБВАЙ Я', x + w / 2 + 5, y, w / 2 - 5, 36, 'ugcTest');
+    menuBtn(social.busy ? '...' : GCT('💾 ЗАПАЗИ И СПОДЕЛИ'), x, y, w / 2 - 5, 36, 'ugcSave', 'primary');
+    menuBtn(GCT('▶ ПРОБВАЙ Я'), x + w / 2 + 5, y, w / 2 - 5, 36, 'ugcTest');
   } else {
     const key = social.tab === 'mine' ? 'mine' : 'top';
     if (social.listKey !== key) { social.listKey = key; social.list = null; }
-    if (!social.list && !social.busy) { if (key === 'mine') socialCall('/ugc/mine', null, r => { social.list = r.mine; }); else { social.busy = true; fetch(API_BASE + '/api/ugc/top?limit=12').then(r => r.json()).then(r => { social.list = r.top; social.busy = false; }).catch(() => { social.busy = false; social.err = 'Няма връзка.'; }); } }
+    if (!social.list && !social.busy) { if (key === 'mine') socialCall('/ugc/mine', null, r => { social.list = r.mine; }); else { social.busy = true; fetch(API_BASE + '/api/ugc/top?limit=12').then(r => r.json()).then(r => { social.list = r.top; social.busy = false; }).catch(() => { social.busy = false; social.err = GCT('Няма връзка.'); }); } }
     const rh = clamp((VH - y - 60) / 8, 26, 36);
     ctx.font = (rh < 30 ? 12 : 13) + 'px sans-serif';
     const list = social.list || [];
-    if (!list.length && !social.busy) { ctx.textAlign = 'center'; ctx.fillStyle = '#666'; ctx.fillText(key === 'mine' ? 'Още нямаш мисии. Направи първата от „НОВА".' : 'Още няма популярни мисии — бъди първият автор!', VW / 2, y + 20); }
+    if (!list.length && !social.busy) { ctx.textAlign = 'center'; ctx.fillStyle = '#666'; ctx.fillText(key === 'mine' ? GCT('Още нямаш мисии. Направи първата от „НОВА".') : GCT('Още няма популярни мисии — бъди първият автор!'), VW / 2, y + 20); }
     for (const u of list.slice(0, 8)) {
       ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fillRect(x, y, w, rh - 3);
       ctx.textAlign = 'left'; ctx.fillStyle = '#fff'; ctx.fillText(u.title, x + 8, y + rh / 2 - 4);
       ctx.fillStyle = '#8aa'; ctx.font = '11px sans-serif';
-      ctx.fillText((u.author_nick ? 'от ' + u.author_nick + ' · ' : '') + UGC_LABEL[u.def.type] + ' · ▶ ' + u.plays + ' · 👍 ' + u.likes + ' · ' + fmtMoney(u.def.reward), x + 8, y + rh / 2 + 9);
+      ctx.fillText((u.author_nick ? GCT('от ') + u.author_nick + ' · ' : '') + UGC_LABEL[u.def.type] + ' · ▶ ' + u.plays + ' · 👍 ' + u.likes + ' · ' + fmtMoney(u.def.reward), x + 8, y + rh / 2 + 9);
       ctx.font = 'bold 12px sans-serif';
       menuBtn('▶', x + w - 88, y + 3, 40, rh - 9, 'ugcPlay:' + u.code, 'primary');
       menuBtn('👍', x + w - 44, y + 3, 40, rh - 9, 'ugcLike:' + u.code);
@@ -533,7 +534,7 @@ function drawShopMenu() {
   ctx.font = 'bold 15px sans-serif'; ctx.fillStyle = '#ffd23c';
   ctx.fillText('🪙 ' + (net.me ? net.me.gold : '...') + tr('gold'), VW / 2, VH * 0.08 + 28);
   ctx.font = '11px sans-serif'; ctx.fillStyle = '#8aa';
-  ctx.fillText('Злато печелиш от дневни задачи, рангове, мисии и онлайн победи (до 60 на ден). Скоро: премиум градове и без реклами.', VW / 2, VH * 0.08 + 46);
+  ctx.fillText(GCT('Злато печелиш от дневни задачи, рангове, мисии и онлайн победи (до 60 на ден). Скоро: премиум градове и без реклами.'), VW / 2, VH * 0.08 + 46);
   if (!social.shop) { fetch(API_BASE + '/api/shop').then(r => r.json()).then(r => { social.shop = r.items; }).catch(() => {}); }
   const items = Object.entries(social.shop || {});
   const cols = VW > VH * 1.25 ? 2 : 1;
@@ -578,7 +579,7 @@ function playUgc(u) {
   if (started) { if (MP.active) MP.leaveGame(); startCustomMission(u); pendingUgc = null; return; }
   if (!runLoaded) { runLoaded = true; applyAutoRun(); }
   menuState = 'cities';
-  showMsg('Избери град за мисията „' + u.title + '"', 3);
+  showMsg(GCT('Избери град за мисията „') + u.title + '"', 3);
 }
 function startCustomMission(u) {
   const d = u.def;
@@ -589,9 +590,9 @@ function startCustomMission(u) {
   mission.stealth = !!d.stealth; mission.needWanted = d.wanted || 2; mission.surv = 0;
   mission.checkpoints = []; mission.target = null; mission.drop = null; mission.gear = null; mission.tableIdx = null;
   mission.gangHint = undefined; mission.gang = -1;
-  if (!setupMission({ type: d.type, goal: d.goal, kind: d.kind, stealth: d.stealth, wanted: d.wanted })) { showMsg('Мисията не може да се подготви тук — пробвай в друг град.', 3); return; }
+  if (!setupMission({ type: d.type, goal: d.goal, kind: d.kind, stealth: d.stealth, wanted: d.wanted })) { showMsg(GCT('Мисията не може да се подготви тук — пробвай в друг град.'), 3); return; }
   mission.active = true; mission.startedAt = gameT; mission.ugc = u.code || null;
-  mission.text = '★ ' + u.title + (u.author ? ' (от ' + u.author + ')' : '') + ' · ' + mission.text;
+  mission.text = '★ ' + u.title + (u.author ? GCT(' (от ') + u.author + ')' : '') + ' · ' + mission.text;
   showMsg('☎ ' + mission.text, 5);
   AudioSys.pickup();
 }
@@ -600,12 +601,12 @@ function startCustomMission(u) {
 function editNick() {
   const wrap = document.createElement('div');
   wrap.style.cssText = 'position:fixed;inset:0;z-index:40;background:rgba(5,5,12,.9);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;font-family:sans-serif';
-  const lbl = document.createElement('div'); lbl.textContent = 'Прякор (2–16 знака)'; lbl.style.cssText = 'color:#ffd23c;font-weight:700';
+  const lbl = document.createElement('div'); lbl.textContent = GCT('Прякор (2–16 знака)'); lbl.style.cssText = 'color:#ffd23c;font-weight:700';
   const inp = document.createElement('input'); inp.maxLength = 16; inp.value = net.nick || '';
   inp.style.cssText = 'font-size:18px;padding:10px 12px;border-radius:6px;border:1px solid #ffd23c;background:#111;color:#fff;width:min(80vw,280px);text-align:center';
   const row = document.createElement('div'); row.style.cssText = 'display:flex;gap:10px';
   const mk = (t, bg) => { const b = document.createElement('div'); b.textContent = t; b.style.cssText = 'padding:10px 18px;border-radius:6px;font-weight:700;background:' + bg + ';color:#111'; return b; };
-  const ok = mk('Запази', '#ffd23c'), no = mk('Отказ', '#888');
+  const ok = mk(GCT('Запази'), '#ffd23c'), no = mk(GCT('Отказ'), '#888');
   const msg = document.createElement('div'); msg.style.cssText = 'color:#e08080;font-size:13px;min-height:16px';
   row.append(ok, no); wrap.append(lbl, inp, row, msg); document.body.appendChild(wrap);
   setTimeout(() => inp.focus(), 50);
@@ -631,7 +632,7 @@ function drawBoardMenu() {
   let y = VH * 0.17;
   ctx.font = fs2 + 'px sans-serif';
   if (net.busy) { ctx.fillStyle = '#aaa'; ctx.fillText(tr('loading'), VW / 2, y + 20); }
-  else if (net.err) { ctx.fillStyle = '#e08080'; ctx.fillText(net.err + ' Тапни, за да опиташ пак.', VW / 2, y + 20); menuButtons.push({ x: 0, y: 0, w: VW, h: VH * 0.6, act: 'retry' }); }
+  else if (net.err) { ctx.fillStyle = '#e08080'; ctx.fillText(net.err + GCT(' Тапни, за да опиташ пак.'), VW / 2, y + 20); menuButtons.push({ x: 0, y: 0, w: VW, h: VH * 0.6, act: 'retry' }); }
   else if (net.board) {
     for (let i = 0; i < net.board.length; i++) {
       const p = net.board[i], me = p.id === net.id;
@@ -641,18 +642,18 @@ function drawBoardMenu() {
       ctx.font = (i < 3 || me ? 'bold ' : '') + fs2 + 'px sans-serif';
       ctx.fillText((i + 1) + '. ' + (p.badge || '') + p.nick + (p.rank ? '  · ' + p.rank : ''), x + 10, y + rowH / 2 - 1);
       ctx.textAlign = 'right';
-      ctx.fillText(fmtMoney(p.best) + '  · ' + p.missions + ' мис.', x + w - 10, y + rowH / 2 - 1);
+      ctx.fillText(fmtMoney(p.best) + '  · ' + p.missions + GCT(' мис.'), x + w - 10, y + rowH / 2 - 1);
       y += rowH;
     }
     ctx.textAlign = 'center'; ctx.font = '13px sans-serif'; ctx.fillStyle = '#8aa';
     y += 8;
-    ctx.fillText('Играчи: ' + net.players + (net.pos ? '  ·  Ти си #' + net.pos : '') +
-      (net.dailyCount != null ? '  ·  Дневната днес: ' + net.dailyCount + ' души' : ''), VW / 2, y); y += 22;
+    ctx.fillText(GCT('Играчи: ') + net.players + (net.pos ? GCT('  ·  Ти си #') + net.pos : '') +
+      (net.dailyCount != null ? GCT('  ·  Дневната днес: ') + net.dailyCount + GCT(' души') : ''), VW / 2, y); y += 22;
   }
   const bh = clamp(rowH + 10, 32, 42);
   y = Math.max(y + 6, VH - bh * 2 - 22);
   ctx.font = 'bold 14px sans-serif';
-  menuBtn('✎ Прякор: ' + (net.nick || 'Гангстер'), x, y, w / 2 - 5, bh, 'nick'); 
+  menuBtn(GCT('✎ Прякор: ') + (net.nick || GCT('Гангстер')), x, y, w / 2 - 5, bh, 'nick'); 
   menuBtn(tr('back'), x + w / 2 + 5, y, w / 2 - 5, bh, 'back');
   ctx.textBaseline = 'top';
 }
@@ -663,7 +664,7 @@ const MP_MODES = { get free() { return tr('mFree'); }, get cash() { return tr('m
 const MP_MODE_DESC = { get free() { return tr('dFree'); }, get cash() { return tr('dCash'); }, get bounty() { return tr('dBounty'); } };
 const MP_CYCLE = { map: ['sofia', 'ruse'], mode: ['free', 'cash', 'bounty'], minutes: [3, 5, 10], police: [true, false], ff: [true, false], traffic: [1, 0.4, 0], weapons: ['all', 'pistol'], chat: [true, false] };
 const MP_LABEL = {
-  map: v => v === 'ruse' ? tr('lRuse') : tr('lSofia'), mode: v => MP_MODES[v], minutes: v => v + ' мин',
+  map: v => v === 'ruse' ? tr('lRuse') : tr('lSofia'), mode: v => MP_MODES[v], minutes: v => v + GCT(' мин'),
   police: v => v ? tr('lYes') : tr('lNo'), ff: v => v ? tr('lOn') : tr('lOff'), traffic: v => v === 1 ? tr('lNormal') : v === 0.4 ? tr('lRare') : tr('lNo'),
   weapons: v => v === 'all' ? tr('lAll') : tr('lPistol'),
   chat: v => v ? tr('lOn') : tr('lEmoji'),
@@ -728,11 +729,11 @@ const MP = {
         for (const sid of [...this.players.keys()]) if (!m.players.some(p => p.sid === sid)) { this.players.delete(sid); this.fakeCars.delete(sid); }
         break;
       case 'join':
-        if (m.from !== this.sid) { this.players.set(m.from, this.newRemote(m.nick)); if (this.active) showMsg('👋 ' + m.nick + ' влезе в града', 2.5); }
+        if (m.from !== this.sid) { this.players.set(m.from, this.newRemote(m.nick)); if (this.active) showMsg('👋 ' + m.nick + GCT(' влезе в града'), 2.5); }
         break;
       case 'leave': {
         const p = this.players.get(m.from);
-        if (p && this.active) showMsg(p.nick + ' напусна', 2);
+        if (p && this.active) showMsg(p.nick + GCT(' напусна'), 2);
         this.players.delete(m.from); this.fakeCars.delete(m.from);
         break;
       }
@@ -746,8 +747,8 @@ const MP = {
       case 'ev': this.onEvent(m); break;
       case 'start': if (this.lobby) this.lobby.started = true; this.startGame(m.settings, m.seed); break;
       case 'end': if (this.active && !this.results) this.finishMatch(true); break;
-      case 'full': this.err = 'Стаята е пълна (12 души).'; this.joining = false; break;
-      case 'nocode': this.err = 'Няма стая с този код.'; this.joining = false; break;
+      case 'full': this.err = GCT('Стаята е пълна (12 души).'); this.joining = false; break;
+      case 'nocode': this.err = GCT('Няма стая с този код.'); this.joining = false; break;
     }
   },
   newRemote(nick) { return { nick, x: 0, y: 0, a: 0, tx: 0, ty: 0, ta: 0, car: null, hp: 100, w: 1, sc: 0, dead: false, seen: false, bubble: '', bubbleT: 0, lastT: 0 }; },
@@ -761,7 +762,7 @@ const MP = {
     } else if (m.kind === 'boom') {
       explode(m.x, m.y, false);
     } else if (m.kind === 'died') {
-      if (m.by === this.sid) { this.kills++; showMsg('💀 Свали ' + (p ? p.nick : 'съперник') + '!  (' + this.kills + ')', 2.5); AudioSys.gouranga(); }
+      if (m.by === this.sid) { this.kills++; showMsg(GCT('💀 Свали ') + (p ? p.nick : GCT('съперник')) + '!  (' + this.kills + ')', 2.5); AudioSys.gouranga(); }
       if (p) p.dead = true;
     } else if (m.kind === 'chat' && p) {
       p.bubble = m.text; p.bubbleT = 3.5;
@@ -792,7 +793,7 @@ const MP = {
     started = true; paused = false; gameOver = false;
     AudioSys.init(); MusicSys.start();
     this.ui(true);
-    showMsg('🌐 ' + MP_MODES[settings.mode] + (this.timeLeft ? ' · ' + settings.minutes + ' мин' : '') + ' · ' + this.players.size + (this.players.size === 1 ? ' съперник' : ' съперници'), 4);
+    showMsg('🌐 ' + MP_MODES[settings.mode] + (this.timeLeft ? ' · ' + settings.minutes + GCT(' мин') : '') + ' · ' + this.players.size + (this.players.size === 1 ? GCT(' съперник') : GCT(' съперници')), 4);
   },
   update(dt) {
     if (!this.active) return;
@@ -855,17 +856,17 @@ const MP = {
     if (!text) return;
     this.send({ t: 'ev', kind: 'chat', text });
     this.myBubble = text; this.myBubbleT = 3.5;
-    this.chatLog.push({ nick: 'Ти', text, t: 0, me: true });
+    this.chatLog.push({ nick: GCT('Ти'), text, t: 0, me: true });
     if (this.chatLog.length > 6) this.chatLog.shift();
   },
   openChat() {
     if (this.chatBox) return;
     const wrap = document.createElement('div');
     wrap.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:41;background:rgba(5,5,12,.92);padding:10px;display:flex;gap:8px;align-items:center;font-family:sans-serif';
-    const inp = document.createElement('input'); inp.maxLength = 80; inp.placeholder = 'Съобщение до всички...';
+    const inp = document.createElement('input'); inp.maxLength = 80; inp.placeholder = GCT('Съобщение до всички...');
     inp.style.cssText = 'flex:1;font-size:16px;padding:10px 12px;border-radius:6px;border:1px solid #ffd23c;background:#111;color:#fff';
     const mk = (t, bg) => { const b = document.createElement('div'); b.textContent = t; b.style.cssText = 'padding:10px 14px;border-radius:6px;font-weight:700;background:' + bg + ';color:#111;touch-action:none'; return b; };
-    const ok = mk('Прати', '#ffd23c'), no = mk('✕', '#888');
+    const ok = mk(GCT('Прати'), '#ffd23c'), no = mk('✕', '#888');
     wrap.append(inp, ok, no); document.body.appendChild(wrap); this.chatBox = wrap;
     setTimeout(() => inp.focus(), 50);
     const close = () => { wrap.remove(); this.chatBox = null; };
@@ -886,7 +887,7 @@ const MP = {
       for (const e of ['👋', '😂', '🔥', '💀', '🏁']) w.appendChild(mkBtn(e, () => this.say(e)));
       if (this.rules && this.rules.chat) w.appendChild(mkBtn('💬', () => this.openChat(), ';font-size:18px'));
       const miniW = clamp(Math.min(VW, VH) * 0.22, 90, 150) + 24;
-      const q = mkBtn('✕ Излез', () => this.leaveGame(), ';font:700 12px sans-serif;color:#e08080;border-color:#e05a5a;height:30px;border-radius:6px');
+      const q = mkBtn(GCT('✕ Излез'), () => this.leaveGame(), ';font:700 12px sans-serif;color:#e08080;border-color:#e05a5a;height:30px;border-radius:6px');
       q.style.position = 'fixed'; q.style.right = miniW + 'px'; q.style.top = '8px'; q.style.zIndex = 30;
       document.body.append(w, q); this.emoteWrap = w; this.leaveBtn = q;
     } else if (!on && this.emoteWrap) {
@@ -935,7 +936,7 @@ const MP = {
     ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'top';
     let y = VW < 700 ? 64 : 8;          // на тесен екран — под парите и минимапата
     ctx.font = 'bold 13px sans-serif';
-    const head = '🌐 ' + MP_MODES[mode] + (this.timeLeft ? '   ⏱ ' + Math.floor(this.timeLeft / 60) + ':' + String(Math.floor(this.timeLeft % 60)).padStart(2, '0') : '') + '   · ' + (this.players.size + 1) + ' в града';
+    const head = '🌐 ' + MP_MODES[mode] + (this.timeLeft ? '   ⏱ ' + Math.floor(this.timeLeft / 60) + ':' + String(Math.floor(this.timeLeft % 60)).padStart(2, '0') : '') + '   · ' + (this.players.size + 1) + GCT(' в града');
     const w = ctx.measureText(head).width + 16;
     ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(VW / 2 - w / 2, y, w, 18);
     ctx.fillStyle = '#fff'; ctx.fillText(head, VW / 2, y + 2); y += 22;
@@ -943,7 +944,7 @@ const MP = {
       ctx.font = '12px sans-serif';
       for (const r of this.standings().slice(0, 4)) {
         ctx.fillStyle = r.me ? '#ffd23c' : '#ddd';
-        ctx.fillText(r.nick + (r.me ? ' (ти)' : '') + ' — ' + (mode === 'cash' ? fmtMoney(r.sc) : r.sc + ' 💀'), VW / 2, y); y += 15;
+        ctx.fillText(r.nick + (r.me ? GCT(' (ти)') : '') + ' — ' + (mode === 'cash' ? fmtMoney(r.sc) : r.sc + ' 💀'), VW / 2, y); y += 15;
       }
     }
     // Чат лог — вляво, над гъбата
@@ -968,7 +969,7 @@ const MP = {
     const a = clamp(r.t / 0.5, 0, 1);
     ctx.fillStyle = 'rgba(5,5,12,' + (0.85 * a).toFixed(2) + ')'; ctx.fillRect(0, 0, VW, VH);
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.font = 'bold 16px sans-serif'; ctx.fillStyle = '#fff'; ctx.fillText('КРАЙ НА МАЧА', VW / 2, VH * 0.16);
+    ctx.font = 'bold 16px sans-serif'; ctx.fillStyle = '#fff'; ctx.fillText(GCT('КРАЙ НА МАЧА'), VW / 2, VH * 0.16);
     if (this.rules.mode !== 'free') {
       ctx.font = 'bold ' + Math.min(44, VW * 0.09) + 'px sans-serif'; ctx.fillStyle = '#ffd23c';
       ctx.fillText('🏆 ' + r.winner.nick, VW / 2, VH * 0.29);
@@ -977,10 +978,10 @@ const MP = {
     let y = VH * 0.44;
     r.rows.forEach((row, i) => {
       ctx.fillStyle = row.me ? '#ffd23c' : '#ddd';
-      ctx.fillText((i + 1) + '. ' + row.nick + (row.me ? ' (ти)' : '') + (this.rules.mode === 'free' ? '' : '  —  ' + (this.rules.mode === 'cash' ? fmtMoney(row.sc) : row.sc + ' 💀')), VW / 2, y); y += 22;
+      ctx.fillText((i + 1) + '. ' + row.nick + (row.me ? GCT(' (ти)') : '') + (this.rules.mode === 'free' ? '' : '  —  ' + (this.rules.mode === 'cash' ? fmtMoney(row.sc) : row.sc + ' 💀')), VW / 2, y); y += 22;
     });
     ctx.fillStyle = '#8aa'; ctx.font = '13px sans-serif';
-    ctx.fillText(this.lobby && this.lobby.kind === 'priv' ? 'Докосни — обратно в лобито' : 'Докосни, за да продължиш', VW / 2, VH * 0.88);
+    ctx.fillText(this.lobby && this.lobby.kind === 'priv' ? GCT('Докосни — обратно в лобито') : GCT('Докосни, за да продължиш'), VW / 2, VH * 0.88);
     ctx.textBaseline = 'top';
   },
   fetchStats() { fetch(API_BASE + '/api/online').then(r => r.json()).then(j => { this.stats = j; }).catch(() => { this.stats = null; }); },
@@ -1046,7 +1047,7 @@ function drawLobbyMenu() {
   const L = MP.lobby;
   ctx.fillStyle = '#0a0a12'; ctx.fillRect(0, 0, VW, VH);
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  if (!L) { ctx.fillStyle = '#aaa'; ctx.font = '14px sans-serif'; ctx.fillText('Свързвам...', VW / 2, VH / 2); ctx.textBaseline = 'top'; return; }
+  if (!L) { ctx.fillStyle = '#aaa'; ctx.font = '14px sans-serif'; ctx.fillText(GCT('Свързвам...'), VW / 2, VH / 2); ctx.textBaseline = 'top'; return; }
   const host = MP.isHost();
   const landscape = VW > VH * 1.25;
   const pad = 12, colW = landscape ? (VW - pad * 3) / 2 : VW - pad * 2;
@@ -1066,7 +1067,7 @@ function drawLobbyMenu() {
     const me = p.sid === MP.sid, isH = p.sid === L.host;
     ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fillRect(lx, y, colW, 26);
     ctx.textAlign = 'left'; ctx.fillStyle = me ? '#ffd23c' : '#ddd';
-    ctx.fillText((isH ? '👑 ' : '') + p.nick + (me ? ' (ти)' : ''), lx + 8, y + 13);
+    ctx.fillText((isH ? '👑 ' : '') + p.nick + (me ? GCT(' (ти)') : ''), lx + 8, y + 13);
     ctx.textAlign = 'right'; ctx.fillStyle = isH ? '#8aa' : p.ready ? '#7ee08a' : '#666';
     ctx.fillText((isH ? tr('hostL') : p.ready ? tr('readyL') : tr('waitingL')) + (me ? '  ✎' : ''), lx + colW - 8, y + 13);
     if (me) menuButtons.push({ x: lx, y, w: colW, h: 26, act: 'nick' });   // тап върху себе си = смяна на прякор
@@ -1106,12 +1107,12 @@ function drawLobbyMenu() {
 function editCode() {
   const wrap = document.createElement('div');
   wrap.style.cssText = 'position:fixed;inset:0;z-index:40;background:rgba(5,5,12,.9);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;font-family:sans-serif';
-  const lbl = document.createElement('div'); lbl.textContent = 'Код за покана (5 знака)'; lbl.style.cssText = 'color:#ffd23c;font-weight:700';
+  const lbl = document.createElement('div'); lbl.textContent = GCT('Код за покана (5 знака)'); lbl.style.cssText = 'color:#ffd23c;font-weight:700';
   const inp = document.createElement('input'); inp.maxLength = 5; inp.autocapitalize = 'characters';
   inp.style.cssText = 'font-size:26px;letter-spacing:8px;padding:10px 12px;border-radius:6px;border:1px solid #ffd23c;background:#111;color:#fff;width:200px;text-align:center;text-transform:uppercase;font-family:monospace';
   const row = document.createElement('div'); row.style.cssText = 'display:flex;gap:10px';
   const mk = (t, bg) => { const b = document.createElement('div'); b.textContent = t; b.style.cssText = 'padding:10px 18px;border-radius:6px;font-weight:700;background:' + bg + ';color:#111'; return b; };
-  const ok = mk('Влез', '#ffd23c'), no = mk('Отказ', '#888');
+  const ok = mk(GCT('Влез'), '#ffd23c'), no = mk(GCT('Отказ'), '#888');
   row.append(ok, no); wrap.append(lbl, inp, row); document.body.appendChild(wrap);
   setTimeout(() => inp.focus(), 50);
   no.onclick = () => wrap.remove();
@@ -1120,9 +1121,9 @@ function editCode() {
 }
 function shareCode() {
   const L = MP.lobby; if (!L) return;
-  const text = 'Ела да играем GangCity! Код за покана: ' + L.code + ' — https://alexanderslavchev.github.io/GangCity/';
+  const text = GCT('Ела да играем GangCity! Код за покана: ') + L.code + ' — https://alexanderslavchev.github.io/GangCity/';
   if (navigator.share) navigator.share({ title: 'GangCity', text }).catch(() => {});
-  else if (navigator.clipboard) { navigator.clipboard.writeText(text).catch(() => {}); showMsg('Кодът е копиран.', 2); }
+  else if (navigator.clipboard) { navigator.clipboard.writeText(text).catch(() => {}); showMsg(GCT('Кодът е копиран.'), 2); }
 }
 
 /* ---------------- Настройки ---------------- */
@@ -1175,7 +1176,7 @@ function tutDraw() {
 }
 
 /* ---------------- Езици ---------------- */
-const LANGS = { bg: 'Български', en: 'English', ru: 'Русский', zh: '中文', ja: '日本語', hi: 'हिन्दी' };
+const LANGS = { bg: GCT('Български'), en: 'English', ru: GCT('Русский'), zh: '中文', ja: '日本語', hi: 'हिन्दी' };
 const LANG_ORDER = ['bg', 'en', 'ru', 'zh', 'ja', 'hi'];
 const I18N = {
   continue: ["▶  ПРОДЪЛЖИ","▶  CONTINUE","▶  ПРОДОЛЖИТЬ","▶  继续","▶  つづける","▶  जारी रखें"],
@@ -1430,8 +1431,8 @@ function menuTapAct(hit) {
     try { localStorage.removeItem('gangcity_auto'); localStorage.removeItem('gangcity_save'); } catch (e) {}
     restartGame(); runLoaded = true; menuState = 'cities';
   } else if (hit === 'settings') { menuState = 'settings'; resetArmed = 0; }
-  else if (hit.startsWith('lang:')) { LANG = hit.slice(5); settings.lang = LANG; settings.langChosen = true; saveSettings(); menuState = 'main'; }
-  else if (hit === 'langCycle') { LANG = LANG_ORDER[(LANG_ORDER.indexOf(LANG) + 1) % LANG_ORDER.length]; settings.lang = LANG; saveSettings(); }
+  else if (hit.startsWith('lang:')) { LANG = hit.slice(5); settings.lang = LANG; settings.langChosen = true; saveSettings(); menuState = 'main'; if (typeof location !== 'undefined' && location.reload) location.reload(); }
+  else if (hit === 'langCycle') { LANG = LANG_ORDER[(LANG_ORDER.indexOf(LANG) + 1) % LANG_ORDER.length]; settings.lang = LANG; saveSettings(); if (typeof location !== 'undefined' && location.reload) location.reload(); }
   else if (hit === 'board') { menuState = 'board'; net.board = null; net.err = null; }
   else if (hit === 'retry') { net.err = null; net.board = null; }
   else if (hit === 'nick') { editNick(); }
@@ -1450,18 +1451,18 @@ function menuTapAct(hit) {
   else if (hit === 'crew') { menuState = 'crew'; social.err = null; social.crew = null; social.crewTop = null; }
   else if (hit === 'friends') { menuState = 'friends'; social.err = null; social.friends = null; }
   else if (hit === 'creator') { menuState = 'creator'; social.err = null; social.list = null; social.listKey = null; }
-  else if (hit === 'crewCreate') { askText('Име на бандата (2–18 знака)', '', async (v) => { const r = await socialCall('/crew/create', { name: v, color: ['#3a6fb5', '#b53a3a', '#3a9b5a', '#a35ab5', '#e8a020'][Math.floor(R() * 5)] }); if (!r) return social.err; await netMe(true); return null; }, { max: 18 }); }
-  else if (hit === 'crewJoin') { askText('Код на бандата (5 знака)', '', async (v) => { const r = await socialCall('/crew/join', { code: v }); if (!r) return social.err; await netMe(true); social.crew = null; return null; }, { max: 5, upper: true, okLabel: 'Влез' }); }
+  else if (hit === 'crewCreate') { askText(GCT('Име на бандата (2–18 знака)'), '', async (v) => { const r = await socialCall('/crew/create', { name: v, color: ['#3a6fb5', '#b53a3a', '#3a9b5a', '#a35ab5', '#e8a020'][Math.floor(R() * 5)] }); if (!r) return social.err; await netMe(true); return null; }, { max: 18 }); }
+  else if (hit === 'crewJoin') { askText(GCT('Код на бандата (5 знака)'), '', async (v) => { const r = await socialCall('/crew/join', { code: v }); if (!r) return social.err; await netMe(true); social.crew = null; return null; }, { max: 5, upper: true, okLabel: GCT('Влез') }); }
   else if (hit === 'crewLeave') { socialCall('/crew/leave', null, async () => { await netMe(true); social.crew = null; }); }
-  else if (hit === 'crewShare') { const c = net.me && net.me.crew; if (c) { const text = 'Влез в бандата ми в GangCity! Код: ' + c.id + ' — https://alexanderslavchev.github.io/GangCity/'; if (navigator.share) navigator.share({ title: 'GangCity', text }).catch(() => {}); else if (navigator.clipboard) navigator.clipboard.writeText(text).catch(() => {}); } }
-  else if (hit === 'fcodeShare') { if (net.me) { const text = 'Добави ме в GangCity! Моят код: ' + net.me.fcode + ' — https://alexanderslavchev.github.io/GangCity/'; if (navigator.share) navigator.share({ title: 'GangCity', text }).catch(() => {}); else if (navigator.clipboard) navigator.clipboard.writeText(text).catch(() => {}); } }
-  else if (hit === 'friendAdd') { askText('Код на приятеля (6 знака)', '', async (v) => { const r = await socialCall('/friends/add', { code: v }); if (!r) return social.err; social.friends = null; return null; }, { max: 6, upper: true, okLabel: 'Добави' }); }
+  else if (hit === 'crewShare') { const c = net.me && net.me.crew; if (c) { const text = GCT('Влез в бандата ми в GangCity! Код: ') + c.id + ' — https://alexanderslavchev.github.io/GangCity/'; if (navigator.share) navigator.share({ title: 'GangCity', text }).catch(() => {}); else if (navigator.clipboard) navigator.clipboard.writeText(text).catch(() => {}); } }
+  else if (hit === 'fcodeShare') { if (net.me) { const text = GCT('Добави ме в GangCity! Моят код: ') + net.me.fcode + ' — https://alexanderslavchev.github.io/GangCity/'; if (navigator.share) navigator.share({ title: 'GangCity', text }).catch(() => {}); else if (navigator.clipboard) navigator.clipboard.writeText(text).catch(() => {}); } }
+  else if (hit === 'friendAdd') { askText(GCT('Код на приятеля (6 знака)'), '', async (v) => { const r = await socialCall('/friends/add', { code: v }); if (!r) return social.err; social.friends = null; return null; }, { max: 6, upper: true, okLabel: GCT('Добави') }); }
   else if (hit.startsWith('goto:')) { const [, kind, code] = hit.split(':'); if (kind === 'pub') MP.joinPublic(code); else MP.joinCode(code); }
   else if (hit.startsWith('tab:')) { social.tab = hit.slice(4); social.err = null; }
-  else if (hit === 'ugc:text') { askText('Заглавие на мисията', social.title, async (v) => { if (v.length < 2) return 'Поне 2 знака.'; social.title = v; askText('Текст на шефа (незадължителен)', social.def.txt, async (t) => { social.def.txt = t; return null; }, { max: 140, multi: true }); return null; }, { max: 40 }); }
+  else if (hit === 'ugc:text') { askText(GCT('Заглавие на мисията'), social.title, async (v) => { if (v.length < 2) return GCT('Поне 2 знака.'); social.title = v; askText(GCT('Текст на шефа (незадължителен)'), social.def.txt, async (t) => { social.def.txt = t; return null; }, { max: 140, multi: true }); return null; }, { max: 40 }); }
   else if (hit.startsWith('ugc:')) { cycleUgc(hit.slice(4)); }
-  else if (hit === 'ugcSave') { if (!social.title) { social.err = 'Дай ѝ заглавие първо.'; } else socialCall('/ugc/create', { title: social.title, def: social.def }, r => { social.savedCode = r.code; social.list = null; const text = 'Пробвай мисията ми „' + social.title + '" в GangCity! Код: ' + r.code; if (navigator.share) navigator.share({ title: 'GangCity', text }).catch(() => {}); }); }
-  else if (hit === 'ugcTest') { playUgc({ title: social.title || 'Проба', author: net.nick, code: null, def: { ...social.def, reward: ugcReward(social.def) } }); }
+  else if (hit === 'ugcSave') { if (!social.title) { social.err = GCT('Дай ѝ заглавие първо.'); } else socialCall('/ugc/create', { title: social.title, def: social.def }, r => { social.savedCode = r.code; social.list = null; const text = GCT('Пробвай мисията ми „') + social.title + GCT('" в GangCity! Код: ') + r.code; if (navigator.share) navigator.share({ title: 'GangCity', text }).catch(() => {}); }); }
+  else if (hit === 'ugcTest') { playUgc({ title: social.title || GCT('Проба'), author: net.nick, code: null, def: { ...social.def, reward: ugcReward(social.def) } }); }
   else if (hit.startsWith('ugcPlay:')) { const u = (social.list || []).find(x => x.code === hit.slice(8)); if (u) playUgc({ title: u.title, author: u.author_nick, code: u.code, def: u.def }); }
   else if (hit.startsWith('ugcLike:')) { socialCall('/ugc/like', { code: hit.slice(8) }, () => { social.list = null; }); }
   else if (hit.startsWith('buy:')) { socialCall('/shop/buy', { item: hit.slice(4) }, r => { net.me = r.me; net.meT = Date.now(); }); }
@@ -1549,7 +1550,7 @@ function drawUnlockScreen() {
   ctx.font = '15px sans-serif'; ctx.fillStyle = 'rgba(220,220,230,' + k2.toFixed(3) + ')';
   ctx.fillText(th.tagline || '', VW / 2, VH * 0.52);
   ctx.fillStyle = 'rgba(126,224,138,' + k2.toFixed(3) + ')';
-  ctx.fillText('Мисиите тук плащат ×' + (th.payMult || 1) + '  ·  Полицията е по-нервна', VW / 2, VH * 0.57);
+  ctx.fillText(GCT('Мисиите тук плащат ×') + (th.payMult || 1) + GCT('  ·  Полицията е по-нервна'), VW / 2, VH * 0.57);
   u.btns = [];
   if (u.t > 1.2) {
     const h = 44, bw = Math.min(200, VW * 0.42), y = VH * 0.7;
@@ -1569,14 +1570,14 @@ function drawUnlockScreen() {
 /* ---------------- Постоянен прогрес (мета) ---------------- */
 const CITY_REQ = [0, 4, 8, 12, 16];   // мисии за отключване на всеки град
 const RANKS = [
-  { xp: 0, name: 'Хлапе' }, { xp: 30, name: 'Джебчия' }, { xp: 80, name: 'Боец' },
-  { xp: 160, name: 'Дясна ръка' }, { xp: 300, name: 'Бос' }, { xp: 500, name: 'Кръстник' },
+  { xp: 0, name: GCT('Хлапе') }, { xp: 30, name: GCT('Джебчия') }, { xp: 80, name: GCT('Боец') },
+  { xp: 160, name: GCT('Дясна ръка') }, { xp: 300, name: GCT('Бос') }, { xp: 500, name: GCT('Кръстник') },
 ];
 const DAILY_TASKS = [
-  { id: 'crush', txt: 'Смачкай 3 коли в пресата', goal: 3 },
-  { id: 'taxi', txt: 'Изкарай $600 с такси', goal: 600 },
-  { id: 'wreck', txt: 'Унищожи 8 коли', goal: 8 },
-  { id: 'missions', txt: 'Завърши 2 мисии', goal: 2 },
+  { id: 'crush', txt: GCT('Смачкай 3 коли в пресата'), goal: 3 },
+  { id: 'taxi', txt: GCT('Изкарай $600 с такси'), goal: 600 },
+  { id: 'wreck', txt: GCT('Унищожи 8 коли'), goal: 8 },
+  { id: 'missions', txt: GCT('Завърши 2 мисии'), goal: 2 },
 ];
 const meta = {
   metaMissions: 0, collection: [], rankXp: 0,
@@ -1590,7 +1591,7 @@ function addRankXp(n) {
   const before = rankOf(meta.rankXp).name;
   meta.rankXp += n;
   const after = rankOf(meta.rankXp);
-  if (after.name !== before) { showMsg('⭐ НОВ РАНГ: ' + after.name.toUpperCase() + '!', 4); AudioSys.gouranga(); netGold('rankup'); }
+  if (after.name !== before) { showMsg(GCT('⭐ НОВ РАНГ: ') + after.name.toUpperCase() + '!', 4); AudioSys.gouranga(); netGold('rankup'); }
   saveMeta();
 }
 function dailyKey(off) {
@@ -1622,8 +1623,8 @@ function dailyProgress(id, amt) {
     addRankXp(10);
     netDaily(meta.daily.date, meta.daily.taskIdx, Math.round(gameT));
     netGold('daily');
-    showMsg('📅 Дневна задача изпълнена! +' + fmtMoney(rew) +
-      (meta.daily.streak > 1 ? ' · Серия: ' + meta.daily.streak + ' дни' : ''), 4);
+    showMsg(GCT('📅 Дневна задача изпълнена! +') + fmtMoney(rew) +
+      (meta.daily.streak > 1 ? GCT(' · Серия: ') + meta.daily.streak + GCT(' дни') : ''), 4);
   } else {
     showMsg('📅 ' + t.txt + ' — ' + Math.min(meta.daily.progress, t.goal) + '/' + t.goal, 1.6);
   }
@@ -1633,7 +1634,7 @@ function collectCar(kind) {
   if (meta.collection.includes(kind)) return;
   meta.collection.push(kind);
   addRankXp(5);
-  showMsg('🚗 Нов модел в колекцията: ' + (CAR_KINDS[kind] ? CAR_KINDS[kind].name : kind) +
+  showMsg(GCT('🚗 Нов модел в колекцията: ') + (CAR_KINDS[kind] ? CAR_KINDS[kind].name : kind) +
     ' (' + meta.collection.length + '/' + Object.keys(CAR_KINDS).length + ')', 3);
   saveMeta();
 }
@@ -2298,32 +2299,32 @@ const AudioSys = {
 
 // ---------------- Оръжия ----------------
 const WEAPONS = [
-  { name: 'Юмруци',        rate: 0.4,  dmg: 12, range: 34,  spread: 0,    melee: true },
-  { name: 'Пистолет',      rate: 0.28, dmg: 25, range: 430, spread: 0.03, auto: false },
-  { name: 'Картечница',    rate: 0.08, dmg: 14, range: 400, spread: 0.08, auto: true },
-  { name: 'Огнехвъргачка', rate: 0.04, dmg: 7,  range: 150, spread: 0.25, auto: true, flame: true },
-  { name: 'Ракетомет',     rate: 1.0,  dmg: 30, range: 700, spread: 0.01, auto: false, rocket: true },
-  { name: 'Молотов',       rate: 1.1,  dmg: 22, range: 300, spread: 0.02, auto: false, molotov: true },
-  { name: 'Електрошок',    rate: 0.4,  dmg: 22, range: 250, spread: 0,    auto: true,  zap: true },
+  { name: GCT('Юмруци'),        rate: 0.4,  dmg: 12, range: 34,  spread: 0,    melee: true },
+  { name: GCT('Пистолет'),      rate: 0.28, dmg: 25, range: 430, spread: 0.03, auto: false },
+  { name: GCT('Картечница'),    rate: 0.08, dmg: 14, range: 400, spread: 0.08, auto: true },
+  { name: GCT('Огнехвъргачка'), rate: 0.04, dmg: 7,  range: 150, spread: 0.25, auto: true, flame: true },
+  { name: GCT('Ракетомет'),     rate: 1.0,  dmg: 30, range: 700, spread: 0.01, auto: false, rocket: true },
+  { name: GCT('Молотов'),       rate: 1.1,  dmg: 22, range: 300, spread: 0.02, auto: false, molotov: true },
+  { name: GCT('Електрошок'),    rate: 0.4,  dmg: 22, range: 250, spread: 0,    auto: true,  zap: true },
 ];
 
 // ---------------- Коли ----------------
 const CAR_KINDS = {
-  sedan:  { name: 'Комета',    l: 42, w: 22, maxSpeed: 280, accel: 210, hp: 100, mass: 1 },
-  taxi:   { name: 'Такси',     l: 42, w: 22, maxSpeed: 300, accel: 230, hp: 100, mass: 1 },
-  sport:  { name: 'Вихър GT',  l: 40, w: 20, maxSpeed: 440, accel: 360, hp: 90,  mass: 0.9 },
-  toro:   { name: 'Торо V12',   l: 42, w: 21, maxSpeed: 520, accel: 430, hp: 80, mass: 0.9 },
-  cavallo:{ name: 'Кавало GT',  l: 43, w: 20, maxSpeed: 545, accel: 450, hp: 75, mass: 0.85 },
-  volta:  { name: 'Волта S',    l: 44, w: 21, maxSpeed: 485, accel: 520, hp: 95, mass: 1.05 },
-  cabrio: { name: 'Бриз кабрио',l: 42, w: 21, maxSpeed: 430, accel: 330, hp: 70, mass: 0.95 },
-  bus:    { name: 'Автобус',   l: 78, w: 25, maxSpeed: 190, accel: 120, hp: 220, mass: 2.6 },
-  truck:  { name: 'Камион',    l: 62, w: 25, maxSpeed: 210, accel: 140, hp: 180, mass: 2.2 },
-  police: { name: 'Патрулка',  l: 44, w: 22, maxSpeed: 400, accel: 320, hp: 120, mass: 1.1 },
-  tank:   { name: 'Танк',       l: 56, w: 30, maxSpeed: 150, accel: 100, hp: 900, mass: 6 },
-  swatvan:{ name: 'SWAT ван',   l: 52, w: 26, maxSpeed: 390, accel: 260, hp: 300, mass: 2.4 },
-  fbi:    { name: 'Кола на FBI',l: 44, w: 22, maxSpeed: 470, accel: 380, hp: 90,  mass: 1 },
-  cannon: { name: 'Оръдие',     l: 34, w: 22, maxSpeed: 0,   accel: 0,   hp: 420, mass: 5 },
-  heli:   { name: 'Хеликоптер', l: 52, w: 26, maxSpeed: 330, accel: 210, hp: 240, mass: 1.4 },
+  sedan:  { name: GCT('Комета'),    l: 42, w: 22, maxSpeed: 280, accel: 210, hp: 100, mass: 1 },
+  taxi:   { name: GCT('Такси'),     l: 42, w: 22, maxSpeed: 300, accel: 230, hp: 100, mass: 1 },
+  sport:  { name: GCT('Вихър GT'),  l: 40, w: 20, maxSpeed: 440, accel: 360, hp: 90,  mass: 0.9 },
+  toro:   { name: GCT('Торо V12'),   l: 42, w: 21, maxSpeed: 520, accel: 430, hp: 80, mass: 0.9 },
+  cavallo:{ name: GCT('Кавало GT'),  l: 43, w: 20, maxSpeed: 545, accel: 450, hp: 75, mass: 0.85 },
+  volta:  { name: GCT('Волта S'),    l: 44, w: 21, maxSpeed: 485, accel: 520, hp: 95, mass: 1.05 },
+  cabrio: { name: GCT('Бриз кабрио'),l: 42, w: 21, maxSpeed: 430, accel: 330, hp: 70, mass: 0.95 },
+  bus:    { name: GCT('Автобус'),   l: 78, w: 25, maxSpeed: 190, accel: 120, hp: 220, mass: 2.6 },
+  truck:  { name: GCT('Камион'),    l: 62, w: 25, maxSpeed: 210, accel: 140, hp: 180, mass: 2.2 },
+  police: { name: GCT('Патрулка'),  l: 44, w: 22, maxSpeed: 400, accel: 320, hp: 120, mass: 1.1 },
+  tank:   { name: GCT('Танк'),       l: 56, w: 30, maxSpeed: 150, accel: 100, hp: 900, mass: 6 },
+  swatvan:{ name: GCT('SWAT ван'),   l: 52, w: 26, maxSpeed: 390, accel: 260, hp: 300, mass: 2.4 },
+  fbi:    { name: GCT('Кола на FBI'),l: 44, w: 22, maxSpeed: 470, accel: 380, hp: 90,  mass: 1 },
+  cannon: { name: GCT('Оръдие'),     l: 34, w: 22, maxSpeed: 0,   accel: 0,   hp: 420, mass: 5 },
+  heli:   { name: GCT('Хеликоптер'), l: 52, w: 26, maxSpeed: 330, accel: 210, hp: 240, mass: 1.4 },
 };
 const CAR_COLORS = ['#c0392b', '#2e6bb5', '#3f9a4d', '#c9b530', '#9b59b6', '#2aa5a0', '#e07b28', '#dadfe4', '#37474f', '#a56a5a', '#5d4a7e', '#7a2c2c'];
 
@@ -2642,12 +2643,12 @@ function tryBoardTrain() {
     for (const t of trains) {
       if (t.dwell > 0 && t.stationIdx === i) {
         player.onTrain = t;
-        showMsg('Пътуваш от „' + theme.stations[i] + '“. Слизане с ' + (IS_TOUCH ? '🚗' : 'E') + '.', 3);
+        showMsg(GCT('Пътуваш от „') + theme.stations[i] + GCT('“. Слизане с ') + (IS_TOUCH ? '🚗' : 'E') + '.', 3);
         AudioSys.pickup();
         return true;
       }
     }
-    showMsg('Изчакай влака на спирката.', 1.5);
+    showMsg(GCT('Изчакай влака на спирката.'), 1.5);
     return true;
   }
   return false;
@@ -2796,7 +2797,7 @@ function updateWanted(dt) {
   if (fbiCars < wantFbi && R() < dt * 0.5) spawnChaser('fbi');
   if (armyTanks < wantArmy && R() < dt * 0.3) {
     const t2 = spawnChaser('tank');
-    if (t2) { t2.army = true; t2.turret = t2.angle; showMsg('АРМИЯТА Е НА УЛИЦАТА!', 2.5); }
+    if (t2) { t2.army = true; t2.turret = t2.angle; showMsg(GCT('АРМИЯТА Е НА УЛИЦАТА!'), 2.5); }
   }
   // Пеши: полицаи от 2 глави, SWAT от 4, войници с узита на 6 (на 5 FBI рядко слизат)
   const wantFoot = W >= 6 ? 6 : W === 5 ? 1 : W >= 2 ? W * 2 : 0;
@@ -2833,7 +2834,7 @@ function spawnRoadblock(W) {
       t2.army = true; t2.sentry = true;
       t2.turret = Math.atan2(player.y - cy, player.x - cx);
       cars.push(t2);
-      showMsg('ТАНКОВА БАРИКАДА НАПРЕД!', 2);
+      showMsg(GCT('ТАНКОВА БАРИКАДА НАПРЕД!'), 2);
     } else {
       for (const off of [-26, 26]) {
         const pc = makeCar(cx + Math.cos(across) * off, cy + Math.sin(across) * off, across, W >= 5 ? 'fbi' : 'police');
@@ -2846,7 +2847,7 @@ function spawnRoadblock(W) {
         if (W >= 4) { cp.swat = true; cp.hp = 90; cp.shirt = '#1d242b'; }
         peds.push(cp);
       }
-      showMsg('🚧 Полицейска барикада напред!', 2);
+      showMsg(GCT('🚧 Полицейска барикада напред!'), 2);
     }
     return;
   }
@@ -2965,7 +2966,7 @@ function damagePed(p, dmg, byPlayer, cause) {
         gour.count++; gour.timer = 4;
         if (gour.count >= 3) {
           addScore(1000, p.x, p.y - 20);
-          showMsg('ГУРАНГА!!! +' + fmtMoney(1000 * mult), 2.5);
+          showMsg(GCT('ГУРАНГА!!! +') + fmtMoney(1000 * mult), 2.5);
           AudioSys.gouranga();
           gour.count = 0;
         }
@@ -3023,7 +3024,7 @@ function startFrenzy() {
   frenzy.goal = 6 + level * 2;
   frenzy.savedWeapon = player.weapon; frenzy.savedAmmo = player.ammo[2];
   player.weapon = 2; player.ammo[2] = 9999;
-  showMsg('ЛУДОСТ! Убий ' + frenzy.goal + ' за 50 секунди!', 4);
+  showMsg(GCT('ЛУДОСТ! Убий ') + frenzy.goal + GCT(' за 50 секунди!'), 4);
   AudioSys.gouranga();
 }
 function endFrenzy(win) {
@@ -3034,8 +3035,8 @@ function endFrenzy(win) {
   if (win) {
     mult = Math.min(8, mult + 1);
     addScore(5000, player.x, player.y);
-    showMsg('ЛУДОСТТА Е ЗАВЪРШЕНА! +' + fmtMoney(5000 * mult) + ' · Множител x' + mult, 4);
-  } else showMsg('Лудостта се провали.', 2.5);
+    showMsg(GCT('ЛУДОСТТА Е ЗАВЪРШЕНА! +') + fmtMoney(5000 * mult) + GCT(' · Множител x') + mult, 4);
+  } else showMsg(GCT('Лудостта се провали.'), 2.5);
 }
 function updateFrenzy(dt) {
   for (const f of frenzySpots) {
@@ -3111,81 +3112,81 @@ function spawnGear(kind) {
   return null;
 }
 const MISSION_TABLE = [
-  { type: 'deliver', txt: 'Първа работа: шефът иска кола. Открадни я и я закарай в гаража.', reward: 2500, timer: 120 },
-  { type: 'hit',     txt: 'Един бърборко говори с ченгетата. Накарай го да замълчи.', reward: 2500, timer: 90 },
-  { type: 'race',    goal: 5, txt: 'Докажи, че си бърз — мини чекпойнтите преди да изтече времето.', reward: 3000 },
-  { type: 'wreck',   goal: 3, txt: 'Конкуренцията ни дразни. Разбий 3 от колите им.', reward: 3000, timer: 100 },
-  { type: 'deliver', kind: 'taxi', txt: 'Трябва ни такси за една маскировка. Докарай едно в гаража.', reward: 3000, timer: 110 },
-  { type: 'fares',   goal: 3, txt: 'Слуховете се разнасят с таксита. Вземи едно, направи 3 курса и слушай.', reward: 3200, timer: 150 },
-  { type: 'crush',   goal: 2, txt: 'Уликите трябва да изчезнат. Смачкай 2 коли в пресата.', reward: 3000, timer: 120 },
-  { type: 'gangkill', goal: 4, txt: 'Онези с цветните ризи ни дишат във врата. Свали 4 от тях в квартала им.', reward: 3500, timer: 120 },
-  { type: 'bomb',    txt: 'Пакетче за един счетоводител. Занеси го на адреса, въоръжи го и изчезвай.', reward: 4000, timer: 110 },
-  { type: 'race',    goal: 3, stealth: true, txt: 'Огледай 3 адреса, тихо. Ако ченгетата те надушат — работата се отменя.', reward: 3500, timer: 150 },
-  { type: 'chase',   kind: 'sport', txt: 'Един курир избяга с нашите пари. Настигни го и го спри — завинаги.', reward: 4000, timer: 100 },
-  { type: 'wreck',   goal: 2, kind: 'police', txt: 'Две патрулки паркират пред гаража всяка вечер. Да не паркират повече.', reward: 4500, timer: 110 },
-  { type: 'deliver', kind: 'sport', txt: 'Шефът иска нещо бързо за уикенда. Спортна кола, в гаража, без драскотина.', reward: 3500, timer: 110 },
-  { type: 'survive', wanted: 2, goal: 45, txt: 'Отвлечи вниманието: вдигни 2 звезди и издържи 45 секунди без арест.', reward: 4000, timer: 120 },
-  { type: 'army',    goal: 6, txt: 'Армията "забрави" техника из града. Вземи танк или оръдие и разбий 6 коли!', reward: 6000, timer: 110 },
-  { type: 'hit',     txt: 'Съдия с прекалено дълга памет. Скъси я.', reward: 4500, timer: 80 },
-  { type: 'race',    goal: 6, txt: 'Обзалагане с една от бандите: 6 чекпойнта срещу часовника.', reward: 4500 },
-  { type: 'fares',   goal: 5, txt: 'Пет курса с такси за три минути. Гилдията ще ни дължи услуга.', reward: 4500, timer: 180 },
-  { type: 'crush',   goal: 3, txt: 'Три горещи коли, три улики. Пресата ги чака.', reward: 4000, timer: 140 },
-  { type: 'bomb',    txt: 'Складът на конкуренцията. Взриви го и не се оглеждай назад.', reward: 5500, timer: 110 },
-  { type: 'deliver', kind: 'volta', txt: 'Тиха кола за тиха работа. Докарай Волта в гаража.', reward: 5000, timer: 130 },
-  { type: 'gangkill', goal: 6, txt: 'Отговор на нападението им: шестима от техните, в техния квартал.', reward: 5000, timer: 130 },
-  { type: 'raid',    goal: 8, txt: 'Отгоре градът е стрелбище. Вземи хеликоптера и бомбардирай 8 коли! Ще стрелят по теб.', reward: 8000, timer: 95 },
-  { type: 'chase',   kind: 'toro', txt: 'Предател с нашия списък бяга с Торо. Спри го, преди да стигне до участъка.', reward: 5500, timer: 90 },
-  { type: 'race',    goal: 4, stealth: true, txt: 'Четири адреса. Нито една звезда. Разбра ли?', reward: 5000, timer: 170 },
-  { type: 'wreck',   goal: 6, txt: 'Показна сила: 6 коли за две минути.', reward: 5500, timer: 120 },
-  { type: 'survive', wanted: 3, goal: 60, txt: 'Ченгетата трябва да са заети другаде. Вдигни 3 звезди и издържи цяла минута.', reward: 6000, timer: 150 },
-  { type: 'deliver', kind: 'police', txt: 'Трябва ни патрулка. Открадни една и я докарай в гаража — без да ти стрелят в гърба.', reward: 6000, timer: 120 },
-  { type: 'deliver', txt: 'Кола с нещо в багажника. Не питай — карай в гаража.', reward: 5000, timer: 100 },
-  { type: 'hit',     txt: 'Един от босовете пие кафе на площада. Последното.', reward: 7000, timer: 90 },
-  { type: 'crush',   goal: 4, txt: 'Четири коли, четири трупа улики. Пресата не задава въпроси.', reward: 5500, timer: 160 },
-  { type: 'army',    goal: 8, txt: 'Армията пак забрави техника. Осем коли този път — покажи им.', reward: 8000, timer: 120 },
-  { type: 'deliver', kind: 'cavallo', txt: 'Само едно Кавало в града. Направи го наше.', reward: 7500, timer: 150 },
-  { type: 'bomb',    txt: 'Централата на конкуренцията. Голям взрив, голяма история.', reward: 8000, timer: 100 },
-  { type: 'survive', wanted: 4, goal: 60, txt: 'Шест глави са за легенди. Вдигни четири и оцелей минута.', reward: 9000, timer: 160 },
-  { type: 'chase',   kind: 'swatvan', hp: 320, txt: 'Босът на другата банда бяга с брониран ван. Спри го. Това е краят на тяхната история.', reward: 12000, timer: 120 },
-  { type: 'hit',     goal: 2, txt: 'Двама свидетели, един следобед. И двамата.', reward: 5000, timer: 110 },
-  { type: 'deliver', kind: 'bus', txt: 'Автобус, пълен с "туристи" на конкуренцията. Открадни го и го докарай в гаража.', reward: 4000, timer: 130 },
-  { type: 'race',    goal: 7, txt: 'Уличната лига: 7 чекпойнта, без спирачки.', reward: 5000 },
-  { type: 'wreck',   goal: 3, kind: 'taxi', txt: 'Таксиметровата гилдия отказа да плаща. Три жълти коли на скрап.', reward: 4500, timer: 120 },
-  { type: 'crush',   goal: 3, txt: 'Пресата има нова поръчка: три коли до обяд.', reward: 4500, timer: 150 },
-  { type: 'bomb',    txt: 'Кафенето, където ченгетата закусват. Без жертви — просто послание.', reward: 5500, timer: 100 },
-  { type: 'chase',   kind: 'taxi', txt: 'Таксиджия видя твърде много. Настигни го, преди да стигне до участъка.', reward: 4500, timer: 90 },
-  { type: 'survive', wanted: 2, goal: 60, txt: 'Дръж ченгетата заети една минута, докато момчетата свършат работата.', reward: 5000, timer: 130 },
-  { type: 'gangkill', goal: 5, txt: 'Петима от тях, за да разберат кой командва.', reward: 5000, timer: 130 },
-  { type: 'deliver', kind: 'cabrio', txt: 'Шефката иска кабрио за плажа. Без покрив, без въпроси.', reward: 5000, timer: 130 },
-  { type: 'race',    goal: 4, stealth: true, txt: 'Четири срещи с информатори. Нито една звезда, иначе изчезват.', reward: 5500, timer: 180 },
-  { type: 'hit',     goal: 3, txt: 'Трима братя, три квартала. До полунощ.', reward: 7000, timer: 150 },
-  { type: 'wreck',   goal: 4, kind: 'police', txt: 'Четири патрулки. Ченгетата да разберат, че градът не е техен.', reward: 7000, timer: 140 },
-  { type: 'deliver', kind: 'swatvan', txt: 'SWAT ван — с него влизаме навсякъде. Открадни един и го докарай.', reward: 7000, timer: 140 },
-  { type: 'army',    goal: 7, txt: 'Танкова разходка: седем коли.', reward: 7500, timer: 120 },
-  { type: 'bomb',    txt: 'Оръжейният склад на конкуренцията. Взриви го и се измъкни жив.', reward: 7000, timer: 100 },
-  { type: 'chase',   kind: 'cavallo', hp: 140, txt: 'Крадец с нашето Кавало. Няма да го хванеш по права — притисни го в завоите.', reward: 7500, timer: 100 },
-  { type: 'fares',   goal: 6, txt: 'Шест курса с такси. Един от клиентите носи плик — не питай.', reward: 6000, timer: 200 },
-  { type: 'survive', wanted: 3, goal: 75, txt: 'Седемдесет и пет секунди на три звезди. За смелчаци.', reward: 7500, timer: 170 },
-  { type: 'deliver', txt: 'Кола с труп в багажника. Гаражът, бързо, преди да замирише.', reward: 6000, timer: 90 },
-  { type: 'hit',     txt: 'Ченге под прикритие в квартала. Разкрит е. Довърши го.', reward: 7500, timer: 90 },
-  { type: 'race',    goal: 8, txt: 'Големият кръг: 8 чекпойнта през целия град.', reward: 7000 },
-  { type: 'raid',    goal: 10, txt: 'Хеликоптерът пак е наш. Десет коли от въздуха.', reward: 10000, timer: 110 },
-  { type: 'crush',   goal: 5, txt: 'Пет коли в пресата за три минути. Собственикът ще ни е длъжник.', reward: 7000, timer: 180 },
-  { type: 'gangkill', goal: 8, txt: 'Война. Осем от тях.', reward: 8000, timer: 150 },
-  { type: 'deliver', kind: 'tank', txt: 'Шефът иска ТАНК в гаража. Не питай откъде — потърси наоколо.', reward: 10000, timer: 200 },
-  { type: 'chase',   kind: 'fbi', static: true, txt: 'Колата на FBI пред участъка. Разбий я, докато е паркирана, и се махни.', reward: 6000, timer: 100 },
-  { type: 'bomb',    txt: 'Бензиностанцията на конкуренцията. Взривът ще се види от целия град.', reward: 8500, timer: 100 },
-  { type: 'survive', wanted: 5, goal: 45, txt: 'Пет звезди — SWAT и FBI. Четиридесет и пет секунди.', reward: 10000, timer: 150 },
-  { type: 'hit',     goal: 4, txt: 'Четирима съдебни заседатели. Процесът трябва да пропадне.', reward: 9000, timer: 180 },
-  { type: 'wreck',   goal: 8, txt: 'Осем коли. Шоуто трябва да е незабравимо.', reward: 8000, timer: 150 },
-  { type: 'deliver', kind: 'heli', txt: 'Хеликоптерът от покрива. Докарай го в гаража — кацни до вратата.', reward: 12000, timer: 150 },
-  { type: 'race',    goal: 5, stealth: true, txt: 'Пет адреса, тихо като сянка.', reward: 7500, timer: 200 },
-  { type: 'chase',   kind: 'volta', txt: 'Тиха кола, тих беглец. Няма да го чуеш — следвай маркера.', reward: 7500, timer: 100 },
-  { type: 'fares',   goal: 8, txt: 'Осем курса за четири минути. Рекордът на гилдията.', reward: 8000, timer: 240 },
-  { type: 'army',    goal: 10, txt: 'Десет коли с армейска техника. Легендата за танкиста.', reward: 11000, timer: 140 },
-  { type: 'gangkill', goal: 10, txt: 'Десет. Това е последната им война.', reward: 10000, timer: 180 },
-  { type: 'survive', wanted: 6, goal: 60, txt: 'Шест глави. Армията. Една минута. Оцелееш ли, си Кръстник.', reward: 15000, timer: 180 },
-  { type: 'chase',   kind: 'tank', hp: 900, txt: 'Дезертьор с танк бяга през града. Спри го с каквото имаш.', reward: 15000, timer: 160 },
+  { type: 'deliver', txt: GCT('Първа работа: шефът иска кола. Открадни я и я закарай в гаража.'), reward: 2500, timer: 120 },
+  { type: 'hit',     txt: GCT('Един бърборко говори с ченгетата. Накарай го да замълчи.'), reward: 2500, timer: 90 },
+  { type: 'race',    goal: 5, txt: GCT('Докажи, че си бърз — мини чекпойнтите преди да изтече времето.'), reward: 3000 },
+  { type: 'wreck',   goal: 3, txt: GCT('Конкуренцията ни дразни. Разбий 3 от колите им.'), reward: 3000, timer: 100 },
+  { type: 'deliver', kind: 'taxi', txt: GCT('Трябва ни такси за една маскировка. Докарай едно в гаража.'), reward: 3000, timer: 110 },
+  { type: 'fares',   goal: 3, txt: GCT('Слуховете се разнасят с таксита. Вземи едно, направи 3 курса и слушай.'), reward: 3200, timer: 150 },
+  { type: 'crush',   goal: 2, txt: GCT('Уликите трябва да изчезнат. Смачкай 2 коли в пресата.'), reward: 3000, timer: 120 },
+  { type: 'gangkill', goal: 4, txt: GCT('Онези с цветните ризи ни дишат във врата. Свали 4 от тях в квартала им.'), reward: 3500, timer: 120 },
+  { type: 'bomb',    txt: GCT('Пакетче за един счетоводител. Занеси го на адреса, въоръжи го и изчезвай.'), reward: 4000, timer: 110 },
+  { type: 'race',    goal: 3, stealth: true, txt: GCT('Огледай 3 адреса, тихо. Ако ченгетата те надушат — работата се отменя.'), reward: 3500, timer: 150 },
+  { type: 'chase',   kind: 'sport', txt: GCT('Един курир избяга с нашите пари. Настигни го и го спри — завинаги.'), reward: 4000, timer: 100 },
+  { type: 'wreck',   goal: 2, kind: 'police', txt: GCT('Две патрулки паркират пред гаража всяка вечер. Да не паркират повече.'), reward: 4500, timer: 110 },
+  { type: 'deliver', kind: 'sport', txt: GCT('Шефът иска нещо бързо за уикенда. Спортна кола, в гаража, без драскотина.'), reward: 3500, timer: 110 },
+  { type: 'survive', wanted: 2, goal: 45, txt: GCT('Отвлечи вниманието: вдигни 2 звезди и издържи 45 секунди без арест.'), reward: 4000, timer: 120 },
+  { type: 'army',    goal: 6, txt: GCT('Армията "забрави" техника из града. Вземи танк или оръдие и разбий 6 коли!'), reward: 6000, timer: 110 },
+  { type: 'hit',     txt: GCT('Съдия с прекалено дълга памет. Скъси я.'), reward: 4500, timer: 80 },
+  { type: 'race',    goal: 6, txt: GCT('Обзалагане с една от бандите: 6 чекпойнта срещу часовника.'), reward: 4500 },
+  { type: 'fares',   goal: 5, txt: GCT('Пет курса с такси за три минути. Гилдията ще ни дължи услуга.'), reward: 4500, timer: 180 },
+  { type: 'crush',   goal: 3, txt: GCT('Три горещи коли, три улики. Пресата ги чака.'), reward: 4000, timer: 140 },
+  { type: 'bomb',    txt: GCT('Складът на конкуренцията. Взриви го и не се оглеждай назад.'), reward: 5500, timer: 110 },
+  { type: 'deliver', kind: 'volta', txt: GCT('Тиха кола за тиха работа. Докарай Волта в гаража.'), reward: 5000, timer: 130 },
+  { type: 'gangkill', goal: 6, txt: GCT('Отговор на нападението им: шестима от техните, в техния квартал.'), reward: 5000, timer: 130 },
+  { type: 'raid',    goal: 8, txt: GCT('Отгоре градът е стрелбище. Вземи хеликоптера и бомбардирай 8 коли! Ще стрелят по теб.'), reward: 8000, timer: 95 },
+  { type: 'chase',   kind: 'toro', txt: GCT('Предател с нашия списък бяга с Торо. Спри го, преди да стигне до участъка.'), reward: 5500, timer: 90 },
+  { type: 'race',    goal: 4, stealth: true, txt: GCT('Четири адреса. Нито една звезда. Разбра ли?'), reward: 5000, timer: 170 },
+  { type: 'wreck',   goal: 6, txt: GCT('Показна сила: 6 коли за две минути.'), reward: 5500, timer: 120 },
+  { type: 'survive', wanted: 3, goal: 60, txt: GCT('Ченгетата трябва да са заети другаде. Вдигни 3 звезди и издържи цяла минута.'), reward: 6000, timer: 150 },
+  { type: 'deliver', kind: 'police', txt: GCT('Трябва ни патрулка. Открадни една и я докарай в гаража — без да ти стрелят в гърба.'), reward: 6000, timer: 120 },
+  { type: 'deliver', txt: GCT('Кола с нещо в багажника. Не питай — карай в гаража.'), reward: 5000, timer: 100 },
+  { type: 'hit',     txt: GCT('Един от босовете пие кафе на площада. Последното.'), reward: 7000, timer: 90 },
+  { type: 'crush',   goal: 4, txt: GCT('Четири коли, четири трупа улики. Пресата не задава въпроси.'), reward: 5500, timer: 160 },
+  { type: 'army',    goal: 8, txt: GCT('Армията пак забрави техника. Осем коли този път — покажи им.'), reward: 8000, timer: 120 },
+  { type: 'deliver', kind: 'cavallo', txt: GCT('Само едно Кавало в града. Направи го наше.'), reward: 7500, timer: 150 },
+  { type: 'bomb',    txt: GCT('Централата на конкуренцията. Голям взрив, голяма история.'), reward: 8000, timer: 100 },
+  { type: 'survive', wanted: 4, goal: 60, txt: GCT('Шест глави са за легенди. Вдигни четири и оцелей минута.'), reward: 9000, timer: 160 },
+  { type: 'chase',   kind: 'swatvan', hp: 320, txt: GCT('Босът на другата банда бяга с брониран ван. Спри го. Това е краят на тяхната история.'), reward: 12000, timer: 120 },
+  { type: 'hit',     goal: 2, txt: GCT('Двама свидетели, един следобед. И двамата.'), reward: 5000, timer: 110 },
+  { type: 'deliver', kind: 'bus', txt: GCT('Автобус, пълен с "туристи" на конкуренцията. Открадни го и го докарай в гаража.'), reward: 4000, timer: 130 },
+  { type: 'race',    goal: 7, txt: GCT('Уличната лига: 7 чекпойнта, без спирачки.'), reward: 5000 },
+  { type: 'wreck',   goal: 3, kind: 'taxi', txt: GCT('Таксиметровата гилдия отказа да плаща. Три жълти коли на скрап.'), reward: 4500, timer: 120 },
+  { type: 'crush',   goal: 3, txt: GCT('Пресата има нова поръчка: три коли до обяд.'), reward: 4500, timer: 150 },
+  { type: 'bomb',    txt: GCT('Кафенето, където ченгетата закусват. Без жертви — просто послание.'), reward: 5500, timer: 100 },
+  { type: 'chase',   kind: 'taxi', txt: GCT('Таксиджия видя твърде много. Настигни го, преди да стигне до участъка.'), reward: 4500, timer: 90 },
+  { type: 'survive', wanted: 2, goal: 60, txt: GCT('Дръж ченгетата заети една минута, докато момчетата свършат работата.'), reward: 5000, timer: 130 },
+  { type: 'gangkill', goal: 5, txt: GCT('Петима от тях, за да разберат кой командва.'), reward: 5000, timer: 130 },
+  { type: 'deliver', kind: 'cabrio', txt: GCT('Шефката иска кабрио за плажа. Без покрив, без въпроси.'), reward: 5000, timer: 130 },
+  { type: 'race',    goal: 4, stealth: true, txt: GCT('Четири срещи с информатори. Нито една звезда, иначе изчезват.'), reward: 5500, timer: 180 },
+  { type: 'hit',     goal: 3, txt: GCT('Трима братя, три квартала. До полунощ.'), reward: 7000, timer: 150 },
+  { type: 'wreck',   goal: 4, kind: 'police', txt: GCT('Четири патрулки. Ченгетата да разберат, че градът не е техен.'), reward: 7000, timer: 140 },
+  { type: 'deliver', kind: 'swatvan', txt: GCT('SWAT ван — с него влизаме навсякъде. Открадни един и го докарай.'), reward: 7000, timer: 140 },
+  { type: 'army',    goal: 7, txt: GCT('Танкова разходка: седем коли.'), reward: 7500, timer: 120 },
+  { type: 'bomb',    txt: GCT('Оръжейният склад на конкуренцията. Взриви го и се измъкни жив.'), reward: 7000, timer: 100 },
+  { type: 'chase',   kind: 'cavallo', hp: 140, txt: GCT('Крадец с нашето Кавало. Няма да го хванеш по права — притисни го в завоите.'), reward: 7500, timer: 100 },
+  { type: 'fares',   goal: 6, txt: GCT('Шест курса с такси. Един от клиентите носи плик — не питай.'), reward: 6000, timer: 200 },
+  { type: 'survive', wanted: 3, goal: 75, txt: GCT('Седемдесет и пет секунди на три звезди. За смелчаци.'), reward: 7500, timer: 170 },
+  { type: 'deliver', txt: GCT('Кола с труп в багажника. Гаражът, бързо, преди да замирише.'), reward: 6000, timer: 90 },
+  { type: 'hit',     txt: GCT('Ченге под прикритие в квартала. Разкрит е. Довърши го.'), reward: 7500, timer: 90 },
+  { type: 'race',    goal: 8, txt: GCT('Големият кръг: 8 чекпойнта през целия град.'), reward: 7000 },
+  { type: 'raid',    goal: 10, txt: GCT('Хеликоптерът пак е наш. Десет коли от въздуха.'), reward: 10000, timer: 110 },
+  { type: 'crush',   goal: 5, txt: GCT('Пет коли в пресата за три минути. Собственикът ще ни е длъжник.'), reward: 7000, timer: 180 },
+  { type: 'gangkill', goal: 8, txt: GCT('Война. Осем от тях.'), reward: 8000, timer: 150 },
+  { type: 'deliver', kind: 'tank', txt: GCT('Шефът иска ТАНК в гаража. Не питай откъде — потърси наоколо.'), reward: 10000, timer: 200 },
+  { type: 'chase',   kind: 'fbi', static: true, txt: GCT('Колата на FBI пред участъка. Разбий я, докато е паркирана, и се махни.'), reward: 6000, timer: 100 },
+  { type: 'bomb',    txt: GCT('Бензиностанцията на конкуренцията. Взривът ще се види от целия град.'), reward: 8500, timer: 100 },
+  { type: 'survive', wanted: 5, goal: 45, txt: GCT('Пет звезди — SWAT и FBI. Четиридесет и пет секунди.'), reward: 10000, timer: 150 },
+  { type: 'hit',     goal: 4, txt: GCT('Четирима съдебни заседатели. Процесът трябва да пропадне.'), reward: 9000, timer: 180 },
+  { type: 'wreck',   goal: 8, txt: GCT('Осем коли. Шоуто трябва да е незабравимо.'), reward: 8000, timer: 150 },
+  { type: 'deliver', kind: 'heli', txt: GCT('Хеликоптерът от покрива. Докарай го в гаража — кацни до вратата.'), reward: 12000, timer: 150 },
+  { type: 'race',    goal: 5, stealth: true, txt: GCT('Пет адреса, тихо като сянка.'), reward: 7500, timer: 200 },
+  { type: 'chase',   kind: 'volta', txt: GCT('Тиха кола, тих беглец. Няма да го чуеш — следвай маркера.'), reward: 7500, timer: 100 },
+  { type: 'fares',   goal: 8, txt: GCT('Осем курса за четири минути. Рекордът на гилдията.'), reward: 8000, timer: 240 },
+  { type: 'army',    goal: 10, txt: GCT('Десет коли с армейска техника. Легендата за танкиста.'), reward: 11000, timer: 140 },
+  { type: 'gangkill', goal: 10, txt: GCT('Десет. Това е последната им война.'), reward: 10000, timer: 180 },
+  { type: 'survive', wanted: 6, goal: 60, txt: GCT('Шест глави. Армията. Една минута. Оцелееш ли, си Кръстник.'), reward: 15000, timer: 180 },
+  { type: 'chase',   kind: 'tank', hp: 900, txt: GCT('Дезертьор с танк бяга през града. Спри го с каквото имаш.'), reward: 15000, timer: 160 },
 ];
 function spawnMissionCar(kind, minD, maxD) {
   for (let i = 0; i < 80; i++) {
@@ -3259,7 +3260,7 @@ function setupMission(m) {
   if (m.type === 'gangkill') {
     const gh = mission.gangHint;
     mission.gangTarget = (gh !== undefined && gh >= 0) ? 1 - gh : Math.floor(R() * 2);
-    mission.text += ' Целта са ' + GANGS[mission.gangTarget].name + '.';
+    mission.text += GCT(' Целта са ') + GANGS[mission.gangTarget].name + '.';
     return true;
   }
   if (m.type === 'bomb') {
@@ -3290,18 +3291,18 @@ function chainNext(pi) {
   if (undone.length) return { idx: undone[0], cycle: 0 };
   return { idx: chain[Math.floor(R() * chain.length)], cycle: 1 + Math.floor(doneMissions.length / MISSION_TABLE.length) };
 }
-const MISSION_LABELS = { deliver: 'кражба', hit: 'удар', race: 'гонка', wreck: 'разбиване', fares: 'такси', crush: 'преса',
-  gangkill: 'банди', bomb: 'бомба', chase: 'преследване', survive: 'оцеляване', army: 'танкове', raid: 'хеликоптер' };
+const MISSION_LABELS = { deliver: GCT('кражба'), hit: GCT('удар'), race: GCT('гонка'), wreck: GCT('разбиване'), fares: GCT('такси'), crush: GCT('преса'),
+  gangkill: GCT('банди'), bomb: GCT('бомба'), chase: GCT('преследване'), survive: GCT('оцеляване'), army: GCT('танкове'), raid: GCT('хеликоптер') };
 function phonePreview(pi) {
   const pk = chainNext(pi), m = MISSION_TABLE[pk.idx];
-  return 'Мисия ' + (pk.idx + 1) + ' · ' + (m.stealth ? 'разузнаване' : MISSION_LABELS[m.type] || m.type) + ' · ' + fmtMoney(m.reward);
+  return GCT('Мисия ') + (pk.idx + 1) + ' · ' + (m.stealth ? GCT('разузнаване') : MISSION_LABELS[m.type] || m.type) + ' · ' + fmtMoney(m.reward);
 }
 function startMission() {
   const pick = chainNext(mission.phoneIdx || 0);
   const idx = pick.idx, cycle = pick.cycle;
   mission.tableIdx = idx;
   const m = MISSION_TABLE[idx];
-  mission.type = m.type; mission.text = LANG === 'bg' ? m.txt : missionText(m);
+  mission.type = m.type; mission.text = (LANG !== 'bg' && /[А-Яа-я]/.test(m.txt)) ? missionText(m) : m.txt;   // m.txt вече е преведен от GCT; шаблонът е резерва
   mission.reward = Math.floor(m.reward * (1 + cycle * 0.25));
   mission.timer = m.timer || 120;
   mission.count = 0; mission.goal = m.goal || 0;
@@ -3311,7 +3312,7 @@ function startMission() {
   if (!setupMission(m)) { mission.cooldown = 3; return; }
   mission.active = true;
   mission.startedAt = gameT;
-  mission.text = (idx + 1) + '/' + MISSION_TABLE.length + (cycle ? ' (кръг ' + (cycle + 1) + ')' : '') + ' · ' + mission.text;
+  mission.text = (idx + 1) + '/' + MISSION_TABLE.length + (cycle ? GCT(' (кръг ') + (cycle + 1) + ')' : '') + ' · ' + mission.text;
   mission.reward = Math.floor(mission.reward * (theme.payMult || 1));   // по-далечният град плаща повече
   mission.gang = (mission.gangHint !== undefined && mission.gangHint >= 0) ? mission.gangHint : -1;
   mission.gangHint = undefined;
@@ -3341,21 +3342,21 @@ function endMission(win) {
     if (mission.tableIdx != null) netMission(mission.tableIdx, Math.max(1, Math.round(gameT - (mission.startedAt || gameT))));
     addScore(mission.reward, player.x, player.y - 20);
     let extra = '';
-    if (player.wanted > 0) { player.heat = 0; recalcWanted(); extra = ' · Ченгетата те забравиха'; }
-    if (missionsDone % 2 === 0 && mult < 8) { mult++; extra = ' · Множител x' + mult; }
-    showMsg('РАБОТАТА Е СВЪРШЕНА! +' + fmtMoney(mission.reward * mult) + extra, 4);
+    if (player.wanted > 0) { player.heat = 0; recalcWanted(); extra = GCT(' · Ченгетата те забравиха'); }
+    if (missionsDone % 2 === 0 && mult < 8) { mult++; extra = GCT(' · Множител x') + mult; }
+    showMsg(GCT('РАБОТАТА Е СВЪРШЕНА! +') + fmtMoney(mission.reward * mult) + extra, 4);
     AudioSys.pickup();
   } else {
     // Шефът винаги си взима нещо при провал: пари, кръв или оръжие
-    let msg = 'Провали работата. Шефът не е доволен';
+    let msg = GCT('Провали работата. Шефът не е доволен');
     const pick = Math.floor(R() * 3);
     let done = false;
     if (pick === 0 && score >= 400) {
       const cut = Math.min(score, 400 + Math.floor(score * 0.1));
-      score -= cut; msg += ' — хората му ти взеха ' + fmtMoney(cut) + '.'; done = true;
+      score -= cut; msg += GCT(' — хората му ти взеха ') + fmtMoney(cut) + '.'; done = true;
     } else if (pick === 1 && player.hp > 45) {
       player.hp -= 35; FX.blood(player.x, player.y); AudioSys.hit();
-      msg += ' — момчетата му те понатупаха.'; done = true;
+      msg += GCT(' — момчетата му те понатупаха.'); done = true;
     }
     if (!done) {
       let took = -1;
@@ -3363,14 +3364,14 @@ function endMission(win) {
       if (took > 0) {
         player.ammo[took] = 0;
         if (player.weapon === took) cycleWeapon();
-        msg += ' — конфискува ти ' + WEAPONS[took].name.toLowerCase() + '.';
+        msg += GCT(' — конфискува ти ') + WEAPONS[took].name.toLowerCase() + '.';
       } else if (score > 0) {
         const cut = Math.min(score, 400); score -= cut;
-        msg += ' — хората му ти взеха ' + fmtMoney(cut) + '.';
+        msg += GCT(' — хората му ти взеха ') + fmtMoney(cut) + '.';
       } else if (player.hp > 45) {
         player.hp -= 35; FX.blood(player.x, player.y); AudioSys.hit();
-        msg += ' — момчетата му те понатупаха.';
-      } else msg += '. Този път ти се размина.';
+        msg += GCT(' — момчетата му те понатупаха.');
+      } else msg += GCT('. Този път ти се размина.');
     }
     showMsg(msg, 4);
   }
@@ -3380,7 +3381,7 @@ function endMission(win) {
     if (win) {
       respect[g] = Math.min(100, respect[g] + 12);
       respect[r] = Math.max(-100, respect[r] - 8);
-      showMsg(GANGS[g].name + ' те уважават повече (+12). ' + GANGS[r].name + ' те намразиха (-8).', 3.5);
+      showMsg(GANGS[g].name + GCT(' те уважават повече (+12). ') + GANGS[r].name + GCT(' те намразиха (-8).'), 3.5);
     } else {
       respect[g] = Math.max(-100, respect[g] - 10);
     }
@@ -3397,7 +3398,7 @@ function updateMission(dt) {
       cars.splice(i, 1);
     }
     mission.gear = null;
-    showMsg('Армията си прибра техниката.', 2.5);
+    showMsg(GCT('Армията си прибра техниката.'), 2.5);
   }
   if (!mission.active) return;
   mission.timer -= dt;
@@ -3421,7 +3422,7 @@ function updateMission(dt) {
     if (player.wanted >= mission.needWanted) {
       mission.surv += dt;
       if (Math.floor(mission.surv) !== Math.floor(mission.surv - dt) && Math.floor(mission.surv) % 10 === 0)
-        showMsg('Издържа ' + Math.floor(mission.surv) + '/' + mission.goal + ' сек', 1.5);
+        showMsg(GCT('Издържа ') + Math.floor(mission.surv) + '/' + mission.goal + GCT(' сек'), 1.5);
       if (mission.surv >= mission.goal) { endMission(true); return; }
     }
   } else if (mission.type === 'bomb') {
@@ -3431,7 +3432,7 @@ function updateMission(dt) {
         mission.armT += dt;
         if (mission.armT >= 2) {
           mission.bombState = 1; mission.fuse = 12;
-          showMsg('💣 Въоръжена! Изчезвай — 12 секунди!', 3);
+          showMsg(GCT('💣 Въоръжена! Изчезвай — 12 секунди!'), 3);
           AudioSys.blip(900, 0.1, 0.2, 'square');
         }
       } else mission.armT = 0;
@@ -3446,7 +3447,7 @@ function updateMission(dt) {
       }
     }
   } else if (mission.type === 'race') {
-    if (mission.stealth && player.wanted > 0) { showMsg('Видяха те. Работата се отменя.', 3); endMission(false); return; }
+    if (mission.stealth && player.wanted > 0) { showMsg(GCT('Видяха те. Работата се отменя.'), 3); endMission(false); return; }
     const cp = mission.checkpoints[0];
     if (cp && dist2(player.x, player.y, cp.x, cp.y) < 60 * 60) {
       mission.checkpoints.shift();
@@ -3468,7 +3469,7 @@ damageCar = function (c, dmg, byPlayer, cause) {
   if (!wasDead && c.dead && byPlayer && mission.active && !c.gear && (!mission.wreckKind || c.kind === mission.wreckKind) &&
       (mission.type === 'wreck' || mission.type === 'army' || mission.type === 'raid')) {
     mission.wrecks++;
-    showMsg('Унищожени: ' + mission.wrecks + '/' + mission.wreckGoal, 2);
+    showMsg(GCT('Унищожени: ') + mission.wrecks + '/' + mission.wreckGoal, 2);
     if (mission.wrecks >= mission.wreckGoal) endMission(true);
   }
 };
@@ -3480,7 +3481,7 @@ damagePed = function (p, dmg, byPlayer, cause) {
   _origDamagePed(p, dmg, byPlayer, cause);
   if (!wasDead && p.dead && byPlayer && mission.active && mission.type === 'gangkill' && p.gang === mission.gangTarget) {
     mission.count++;
-    showMsg('Свалени: ' + mission.count + '/' + mission.goal, 2);
+    showMsg(GCT('Свалени: ') + mission.count + '/' + mission.goal, 2);
     if (mission.count >= mission.goal) endMission(true);
   }
 };
@@ -3664,7 +3665,7 @@ function tryEnterCar() {
     if (best.kind === 'police') addHeat(35);
     else if (!wasParked) addHeat(8);
     addScore(10, best.x, best.y);
-    showMsg('Открадна: ' + best.name, 1.6);
+    showMsg(GCT('Открадна: ') + best.name, 1.6);
     collectCar(best.kind);
     if (net.me && net.me.paint && !best.gear && best.kind !== 'police') best.color = net.me.paint;   // купената боя
   }
@@ -3686,7 +3687,7 @@ function updateCrusher(dt) {
   const c = player.car;
   if (dist2(c.x, c.y, crusherDoor.x, crusherDoor.y) > 60 * 60) return;
   if (c.gear || c.kind === 'tank' || c.kind === 'cannon' || c.kind === 'heli') {
-    showMsg('Пресата: "Военна техника не приемаме..."', 2); crusherCd = 4; return;
+    showMsg(GCT('Пресата: "Военна техника не приемаме..."'), 2); crusherCd = 4; return;
   }
   const pay = (c.kind === 'toro' || c.kind === 'cavallo') ? 1500 : c.kind === 'police' ? 1200 : c.kind === 'volta' ? 1100 : c.kind === 'sport' ? 900 : c.kind === 'cabrio' ? 800
     : (c.kind === 'bus' || c.kind === 'truck') ? 700 : c.kind === 'taxi' ? 500 : 400;
@@ -3696,12 +3697,12 @@ function updateCrusher(dt) {
   if (idx >= 0) cars.splice(idx, 1);
   FX.sparks(c.x, c.y); FX.glass(c.x, c.y); AudioSys.hit();
   addScore(payC, c.x, c.y);
-  showMsg('🗜 Пресата я глътна. +' + fmtMoney(payC), 2.5);
+  showMsg(GCT('🗜 Пресата я глътна. +') + fmtMoney(payC), 2.5);
   dailyProgress('crush', 1);
   addRankXp(1);
   if (mission.active && mission.type === 'crush') {
     mission.count++;
-    showMsg('Смачкани: ' + mission.count + '/' + mission.goal, 2);
+    showMsg(GCT('Смачкани: ') + mission.count + '/' + mission.goal, 2);
     if (mission.count >= mission.goal) endMission(true);
   }
   crusherCd = 3;
@@ -3710,13 +3711,13 @@ function updateChurch(dt) {
   churchCd -= dt;
   if (player.car || churchCd > 0) return;
   if (dist2(player.x, player.y, churchDoor.x, churchDoor.y) > 45 * 45) return;
-  if (score < 2000) { showMsg('✝ "Благословията иска дарение от $2,000, чадо."', 2.5); churchCd = 5; return; }
+  if (score < 2000) { showMsg(GCT('✝ "Благословията иска дарение от $2,000, чадо."'), 2.5); churchCd = 5; return; }
   score -= 2000;
   player.hp = 100; player.armor = 100;
   player.heat = 0; recalcWanted();
   autosaveRun();
   AudioSys.pickup();
-  showMsg('✝ Благословен си: здраве, броня, чисто досие. Прогресът е записан. -$2,000', 3);
+  showMsg(GCT('✝ Благословен си: здраве, броня, чисто досие. Прогресът е записан. -$2,000'), 3);
   churchCd = 8;
 }
 function updateTaxi(dt) {
@@ -3726,7 +3727,7 @@ function updateTaxi(dt) {
       taxiJob.offCd += dt;
       if (taxiJob.offCd > 8) {
         taxiJob.fare = null; taxiJob.dest = null; taxiJob.offCd = 0;
-        showMsg('🚕 Клиентът си хвана друго такси.', 2);
+        showMsg(GCT('🚕 Клиентът си хвана друго такси.'), 2);
       }
     }
     return;
@@ -3734,7 +3735,7 @@ function updateTaxi(dt) {
   taxiJob.offCd = 0;
   if (!taxiJob.fare && !taxiJob.dest) {
     const spot = randomSideSpotPx(400);
-    if (spot) { taxiJob.fare = spot; showMsg('🚕 Клиент те чака — следвай жълтата стрелка.', 2.5); }
+    if (spot) { taxiJob.fare = spot; showMsg(GCT('🚕 Клиент те чака — следвай жълтата стрелка.'), 2.5); }
     return;
   }
   if (taxiJob.fare) {
@@ -3745,22 +3746,22 @@ function updateTaxi(dt) {
         taxiJob.dest = dest; taxiJob.fare = null;
         taxiJob.t = 12 + d / 90;
         taxiJob.pay = Math.floor((150 + d * 0.6) * (theme.payMult || 1));
-        showMsg('🚕 Карай! ' + fmtMoney(taxiJob.pay) + ', ако стигнеш навреме.', 2.5);
+        showMsg(GCT('🚕 Карай! ') + fmtMoney(taxiJob.pay) + GCT(', ако стигнеш навреме.'), 2.5);
         AudioSys.pickup();
       }
     }
   } else if (taxiJob.dest) {
     taxiJob.t -= dt;
-    if (taxiJob.t <= 0) { showMsg('🚕 Клиентът избяга без да плати...', 2); taxiJob.dest = null; return; }
+    if (taxiJob.t <= 0) { showMsg(GCT('🚕 Клиентът избяга без да плати...'), 2); taxiJob.dest = null; return; }
     if (dist2(player.car.x, player.car.y, taxiJob.dest.x, taxiJob.dest.y) < 80 * 80 && Math.abs(player.car.speed) < 40) {
       addScore(taxiJob.pay, player.car.x, player.car.y);
       AudioSys.pickup();
-      showMsg('🚕 Доволен клиент! Огледай се за следващия.', 2);
+      showMsg(GCT('🚕 Доволен клиент! Огледай се за следващия.'), 2);
       dailyProgress('taxi', taxiJob.pay);
       addRankXp(1);
       if (mission.active && mission.type === 'fares') {
         mission.count++;
-        showMsg('Курсове: ' + mission.count + '/' + mission.goal, 2);
+        showMsg(GCT('Курсове: ') + mission.count + '/' + mission.goal, 2);
         if (mission.count >= mission.goal) endMission(true);
       }
       taxiJob.dest = null;
@@ -3779,10 +3780,10 @@ function updateRespray(dt) {
       player.car.color = CAR_COLORS[Math.floor(R() * CAR_COLORS.length)];
       player.car.burn = 0;
       resprayCooldown = 6;
-      showMsg('Пребоядисано! Ченгетата те изгубиха. -$1,000', 3);
+      showMsg(GCT('Пребоядисано! Ченгетата те изгубиха. -$1,000'), 3);
       AudioSys.pickup();
     } else if (resprayCooldown <= 0) {
-      showMsg('Бояджийницата иска $1,000...', 2);
+      showMsg(GCT('Бояджийницата иска $1,000...'), 2);
       resprayCooldown = 4;
     }
   }
@@ -3799,7 +3800,7 @@ function updatePlayer(dt, inp) {
       player.ammo = [-1, 0, 0, 0, 0, 0, 0]; player.weapon = 0;
       mult = Math.max(1, Math.ceil(mult / 2));
       player.x = policeDoor.x; player.y = policeDoor.y;
-      showMsg('Пуснаха те от участъка. Оръжията ти ги няма.', 3);
+      showMsg(GCT('Пуснаха те от участъка. Оръжията ти ги няма.'), 3);
     }
     return;
   }
@@ -3812,10 +3813,10 @@ function updatePlayer(dt, inp) {
       player.heat = 0; recalcWanted();
       if (adKeepWeapons) {
         adKeepWeapons = false;
-        showMsg('Болницата те закърпи. Оръжията те чакат под възглавницата. Остават ' + (lives + 1) + ' живота.', 3);
+        showMsg(GCT('Болницата те закърпи. Оръжията те чакат под възглавницата. Остават ') + (lives + 1) + GCT(' живота.'), 3);
       } else {
         player.ammo = [-1, 0, 0, 0, 0, 0, 0]; player.weapon = 0;
-        showMsg('Болницата те закърпи, но оръжията ти изчезнаха. Остават ' + (lives + 1) + ' живота.', 3);
+        showMsg(GCT('Болницата те закърпи, но оръжията ти изчезнаха. Остават ') + (lives + 1) + GCT(' живота.'), 3);
       }
       mult = Math.max(1, mult - 1);
       player.x = hospitalDoor.x; player.y = hospitalDoor.y;
@@ -3836,8 +3837,8 @@ function updatePlayer(dt, inp) {
         const stName = theme.stations[t.stationIdx];
         player.onTrain = null;
         player.x = e.x; player.y = e.y;
-        showMsg('Слезе на „' + stName + '“.', 2);
-      } else showMsg('Изчакай следващата спирка.', 1.5);
+        showMsg(GCT('Слезе на „') + stName + '“.', 2);
+      } else showMsg(GCT('Изчакай следващата спирка.'), 1.5);
     }
     return;
   }
@@ -3858,18 +3859,18 @@ function updatePlayer(dt, inp) {
     const px = player.car ? player.car.x : player.x, py = player.car ? player.car.y : player.y;
     if (dist2(pk.x, pk.y, px, py) < 30 * 30) {
       let taken = true;
-      if (pk.type === 'health') { player.hp = Math.min(100, player.hp + 40); showMsg('+Здраве', 1); }
-      else if (pk.type === 'armor') { player.armor = Math.min(100, player.armor + 50); showMsg('+Броня', 1); }
+      if (pk.type === 'health') { player.hp = Math.min(100, player.hp + 40); showMsg(GCT('+Здраве'), 1); }
+      else if (pk.type === 'armor') { player.armor = Math.min(100, player.armor + 50); showMsg(GCT('+Броня'), 1); }
       else if (pk.type === 'money') { addScore(300, pk.x, pk.y); }
-      else if (pk.type === 'pistol') { player.ammo[1] += 20; if (player.weapon === 0) player.weapon = 1; showMsg('+Пистолет', 1); }
-      else if (pk.type === 'mg') { player.ammo[2] += 50; if (player.weapon <= 1) player.weapon = 2; showMsg('+Картечница', 1); }
-      else if (pk.type === 'flame') { player.ammo[3] += 40; showMsg('+Огнехвъргачка', 1); }
-      else if (pk.type === 'rocket') { player.ammo[4] += 3; showMsg('+Ракетомет', 1); }
-      else if (pk.type === 'molotov') { player.ammo[5] += 5; showMsg('+Молотови', 1); }
-      else if (pk.type === 'zap') { player.ammo[6] += 30; showMsg('+Електрошок', 1); }
-      else if (pk.type === 'dd') { player.dd = 30; showMsg('✖2 ДВОЙНИ ЩЕТИ — 30 сек!', 2.5); }
-      else if (pk.type === 'invis') { player.invis = 20; showMsg('НЕВИДИМ ЗА ПОЛИЦИЯТА — 20 сек', 2.5); }
-      else if (pk.type === 'bribe') { player.heat = 0; recalcWanted(); showMsg('💵 Подкупът мина. Досието е чисто.', 2.5); }
+      else if (pk.type === 'pistol') { player.ammo[1] += 20; if (player.weapon === 0) player.weapon = 1; showMsg(GCT('+Пистолет'), 1); }
+      else if (pk.type === 'mg') { player.ammo[2] += 50; if (player.weapon <= 1) player.weapon = 2; showMsg(GCT('+Картечница'), 1); }
+      else if (pk.type === 'flame') { player.ammo[3] += 40; showMsg(GCT('+Огнехвъргачка'), 1); }
+      else if (pk.type === 'rocket') { player.ammo[4] += 3; showMsg(GCT('+Ракетомет'), 1); }
+      else if (pk.type === 'molotov') { player.ammo[5] += 5; showMsg(GCT('+Молотови'), 1); }
+      else if (pk.type === 'zap') { player.ammo[6] += 30; showMsg(GCT('+Електрошок'), 1); }
+      else if (pk.type === 'dd') { player.dd = 30; showMsg(GCT('✖2 ДВОЙНИ ЩЕТИ — 30 сек!'), 2.5); }
+      else if (pk.type === 'invis') { player.invis = 20; showMsg(GCT('НЕВИДИМ ЗА ПОЛИЦИЯТА — 20 сек'), 2.5); }
+      else if (pk.type === 'bribe') { player.heat = 0; recalcWanted(); showMsg(GCT('💵 Подкупът мина. Досието е чисто.'), 2.5); }
       else taken = false;
       if (taken) { pickups.splice(i, 1); AudioSys.pickup(); }
     }
@@ -3877,7 +3878,7 @@ function updatePlayer(dt, inp) {
 
   player.fireT -= dt;
   if (player.dd > 0) player.dd -= dt;
-  if (player.invis > 0) { player.invis -= dt; if (player.invis <= 0) showMsg('Полицията отново те вижда.', 1.5); }
+  if (player.invis > 0) { player.invis -= dt; if (player.invis <= 0) showMsg(GCT('Полицията отново те вижда.'), 1.5); }
   // Стрелба от военна техника
   if (player.car && !player.car.dead && inp.fire && player.fireT <= 0) {
     const c = player.car;
@@ -3912,7 +3913,7 @@ function updatePlayer(dt, inp) {
       if (MP.active) MP.send({ t: 'ev', kind: 'shot', x: Math.round(player.x), y: Math.round(player.y), a: +player.angle.toFixed(2) });
       if (player.ammo[player.weapon] > 0) {
         player.ammo[player.weapon]--;
-        if (player.ammo[player.weapon] === 0) { showMsg('Патроните свършиха', 1.5); cycleWeapon(); }
+        if (player.ammo[player.weapon] === 0) { showMsg(GCT('Патроните свършиха'), 1.5); cycleWeapon(); }
       }
     }
   }
@@ -4496,7 +4497,7 @@ function updateWeather(dt) {
   weather.timer -= dt;
   if (weather.timer <= 0) {
     if (weather.state === 'clear') {
-      if (R() < 0.65 * (theme.rainBias === undefined ? 1 : theme.rainBias)) { weather.state = 'rain'; weather.timer = 45 + R() * 55; showMsg('Заваля дъжд...', 2.5); }
+      if (R() < 0.65 * (theme.rainBias === undefined ? 1 : theme.rainBias)) { weather.state = 'rain'; weather.timer = 45 + R() * 55; showMsg(GCT('Заваля дъжд...'), 2.5); }
       else weather.timer = 50 + R() * 70;
     }
     else { weather.state = 'clear'; weather.timer = 100 + R() * 130; }
@@ -4585,7 +4586,7 @@ function switchCity(target) {
   gour.count = 0;
   playerToStart();
   spawnWorld();
-  showMsg('Добре дошъл в ' + theme.name + '!', 5);
+  showMsg(GCT('Добре дошъл в ') + theme.name + '!', 5);
 }
 function restartGame() {
   score = 0; mult = 1; lives = 4; level = 1;
@@ -4850,7 +4851,7 @@ function drawPhonesShops() {
       ctx.fillStyle = 'rgba(80,180,255,0.9)';
       ctx.font = 'bold ' + Math.round(11 * camZoom) + 'px sans-serif';
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText('СПРЕЙ', s.x, s.y);
+      ctx.fillText(GCT('СПРЕЙ'), s.x, s.y);
     }
   }
   // Kill Frenzy пикапи
@@ -5589,11 +5590,11 @@ function drawBuildings() {
   }
 
   // Знаци на специалните сгради (над входовете им)
-  drawDoorLabel(hospitalDoor, '#e04545', '➕', 'БОЛНИЦА');
-  drawDoorLabel(crusherDoor, '#e8a020', '🗜', 'ПРЕСА');
-  drawDoorLabel(churchDoor, '#c8b060', '✝', 'ЦЪРКВА');
-  drawDoorLabel(policeDoor, '#8ab6e8', '🛡', 'УЧАСТЪК');
-  drawDoorLabel(resprayDoor, '#50b4ff', '🎨', 'БОЯДЖИЙНИЦА');
+  drawDoorLabel(hospitalDoor, '#e04545', '➕', GCT('БОЛНИЦА'));
+  drawDoorLabel(crusherDoor, '#e8a020', '🗜', GCT('ПРЕСА'));
+  drawDoorLabel(churchDoor, '#c8b060', '✝', GCT('ЦЪРКВА'));
+  drawDoorLabel(policeDoor, '#8ab6e8', '🛡', GCT('УЧАСТЪК'));
+  drawDoorLabel(resprayDoor, '#50b4ff', '🎨', GCT('БОЯДЖИЙНИЦА'));
 
   // Дървета в парковете — леко проектирани (над колите/пешеходците)
   for (let ty = minTy; ty <= maxTy; ty++) {
@@ -5704,7 +5705,7 @@ function drawMetro() {
       ctx.fillStyle = '#fff';
       ctx.font = 'bold ' + Math.round(11 * camZoom) + 'px sans-serif';
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText('М', es.x, es.y + 0.5);
+      ctx.fillText(GCT('М'), es.x, es.y + 0.5);
       // Име на спирката
       ctx.font = 'bold ' + Math.round(8.5 * camZoom) + 'px sans-serif';
       ctx.lineWidth = 3;
@@ -5718,7 +5719,7 @@ function drawMetro() {
             dist2(player.x, player.y, e.x, e.y) < 120 * 120) {
           ctx.fillStyle = '#7ee08a';
           ctx.font = 'bold ' + Math.round(11 * camZoom) + 'px sans-serif';
-          ctx.fillText(IS_TOUCH ? '🚗 качи се' : 'E: качи се', es.x, es.y - 18 * camZoom);
+          ctx.fillText(IS_TOUCH ? GCT('🚗 качи се') : GCT('E: качи се'), es.x, es.y - 18 * camZoom);
         }
       }
     }
@@ -6022,7 +6023,7 @@ function drawTaxiMarker() {
     ctx.fillStyle = '#e8b800';
     ctx.font = 'bold 14px sans-serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-    ctx.fillText('🚕 ' + Math.ceil(taxiJob.t) + ' сек · ' + fmtMoney(taxiJob.pay), VW / 2, 58);
+    ctx.fillText('🚕 ' + Math.ceil(taxiJob.t) + GCT(' сек · ') + fmtMoney(taxiJob.pay), VW / 2, 58);
     ctx.textAlign = 'left';
   }
 }
@@ -6214,11 +6215,11 @@ function drawHUD() {
     ctx.fillText(player.car.name + ' ▮' + Math.max(0, Math.ceil(player.car.hp / player.car.maxHp * 100)) + '%', pad, pad + 62);
   } else if (player.onTrain) {
     ctx.fillStyle = '#aac';
-    ctx.fillText('Метро', pad, pad + 62);
+    ctx.fillText(GCT('Метро'), pad, pad + 62);
   }
   ctx.font = '12px monospace';
   ctx.fillStyle = 'rgba(255,255,255,0.55)';
-  ctx.fillText(theme.name + ' · ниво ' + level, pad, pad + 80);
+  ctx.fillText(theme.name + GCT(' · ниво ') + level, pad, pad + 80);
   // Име на улицата (София — по решетката; Русе — по картата на улиците)
   if ((theme.streetsH || theme.streetNames) && !player.onTrain) {
     const txp = Math.floor(player.x / TILE), typ = Math.floor(player.y / TILE);
@@ -6269,14 +6270,14 @@ function drawHUD() {
     ctx.font = 'bold 14px monospace';
     ctx.textAlign = 'center';
     ctx.fillStyle = mission.timer < 10 ? '#ff5555' : '#ffd23c';
-    ctx.fillText('⏱ ' + Math.ceil(mission.timer) + 'с', VW / 2, pad + 40);
+    ctx.fillText('⏱ ' + Math.ceil(mission.timer) + GCT('с'), VW / 2, pad + 40);
   }
   if (frenzy.active) {
     ctx.font = 'bold 17px monospace';
     ctx.textAlign = 'center';
     const bl = Math.floor(gameT * 4) % 2 === 0;
     ctx.fillStyle = bl ? '#ff4444' : '#ffdd44';
-    ctx.fillText('ЛУДОСТ ' + frenzy.kills + '/' + frenzy.goal + ' · ' + Math.ceil(frenzy.timer) + 'с', VW / 2, VH * 0.1);
+    ctx.fillText(GCT('ЛУДОСТ ') + frenzy.kills + '/' + frenzy.goal + ' · ' + Math.ceil(frenzy.timer) + GCT('с'), VW / 2, VH * 0.1);
   }
 
   // Плаващи числа
@@ -6294,31 +6295,31 @@ function drawHUD() {
   if (player.dead) {
     ctx.fillStyle = 'rgba(70,0,0,' + clamp(player.deadT * 0.4, 0, 0.6) + ')';
     ctx.fillRect(0, 0, VW, VH);
-    bigCenterText('ЕЛИМИНИРАН', '#ff5560');
+    bigCenterText(GCT('ЕЛИМИНИРАН'), '#ff5560');
   }
   if (player.busted) {
     ctx.fillStyle = 'rgba(0,10,50,' + clamp(player.bustedT * 0.4, 0, 0.6) + ')';
     ctx.fillRect(0, 0, VW, VH);
-    bigCenterText('АРЕСТУВАН!', '#7ab6ff');
+    bigCenterText(GCT('АРЕСТУВАН!'), '#7ab6ff');
   }
   if (levelCompleteT > 0) {
-    bigCenterText('ГРАДЪТ Е ТВОЙ!', '#ffd23c');
+    bigCenterText(GCT('ГРАДЪТ Е ТВОЙ!'), '#ffd23c');
     ctx.font = 'bold 18px sans-serif';
     ctx.textAlign = 'center';
     ctx.fillStyle = '#fff';
-    ctx.fillText('Заминаваш за ' + travelToName + ' · Нова цел: ' + fmtMoney(targetScore) + ' · +1 живот', VW / 2, VH / 2 + 44);
+    ctx.fillText(GCT('Заминаваш за ') + travelToName + GCT(' · Нова цел: ') + fmtMoney(targetScore) + GCT(' · +1 живот'), VW / 2, VH / 2 + 44);
   }
   if (gameOver) {
     ctx.fillStyle = 'rgba(0,0,0,0.75)';
     ctx.fillRect(0, 0, VW, VH);
-    bigCenterText('КРАЙ НА ИГРАТА', '#ff5560');
+    bigCenterText(GCT('КРАЙ НА ИГРАТА'), '#ff5560');
     ctx.font = '17px sans-serif';
     ctx.textAlign = 'center';
     ctx.fillStyle = '#fff';
-    ctx.fillText('Резултат: ' + fmtMoney(score) + (score >= scoreBest ? ' · НОВ РЕКОРД!' : ' · Рекорд: ' + fmtMoney(scoreBest)), VW / 2, VH / 2 + 44);
-    ctx.fillText(IS_TOUCH ? 'Докосни за нова игра' : 'Натисни клавиш за нова игра', VW / 2, VH / 2 + 74);
+    ctx.fillText(GCT('Резултат: ') + fmtMoney(score) + (score >= scoreBest ? GCT(' · НОВ РЕКОРД!') : GCT(' · Рекорд: ') + fmtMoney(scoreBest)), VW / 2, VH / 2 + 44);
+    ctx.fillText(IS_TOUCH ? GCT('Докосни за нова игра') : GCT('Натисни клавиш за нова игра'), VW / 2, VH / 2 + 74);
   }
-  if (paused && !gameOver) bigCenterText('ПАУЗА', '#fff');
+  if (paused && !gameOver) bigCenterText(GCT('ПАУЗА'), '#fff');
 
   // Тъч контроли
   if (IS_TOUCH && !gameOver) drawTouchControls();
@@ -6360,8 +6361,8 @@ function drawTouchControls() {
     ctx.beginPath(); ctx.arc(b2.x, b2.y + (st2.active ? st2.dy : 0) * b2.r, b2.r * 0.35, 0, Math.PI * 2); ctx.fill();
     ctx.globalAlpha = 0.7;
     ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('ГАЗ ▲', b2.x, b2.y - h / 2 - 12);
-    ctx.fillText('▼ НАЗАД', b2.x, b2.y + h / 2 + 12);
+    ctx.fillText(GCT('ГАЗ ▲'), b2.x, b2.y - h / 2 - 12);
+    ctx.fillText(GCT('▼ НАЗАД'), b2.x, b2.y + h / 2 + 12);
     ctx.textBaseline = 'top';
   }
   for (const name in touch.buttons) {
@@ -6439,29 +6440,29 @@ function drawStartScreen() {
   }
   ctx.font = '13px sans-serif';
   ctx.fillStyle = '#8aa';
-  ctx.fillText(IS_TOUCH ? 'Докосни град, за да започнеш от него' : 'Натисни 1–' + THEMES.length + ', за да избереш начален град', VW / 2, by + 4);
+  ctx.fillText(IS_TOUCH ? GCT('Докосни град, за да започнеш от него') : GCT('Натисни 1–') + THEMES.length + GCT(', за да избереш начален град'), VW / 2, by + 4);
   ctx.font = '15px sans-serif';
   ctx.fillStyle = '#ccc';
   const lines = IS_TOUCH ? [
-    'Събери ' + fmtMoney(targetScore) + ', за да превземеш града!',
-    'Отговаряй на звънящите телефони ☎ за работа от шефа.',
-    'Метрото Ⓜ те превозва бързо — качи се от спирка.',
+    GCT('Събери ') + fmtMoney(targetScore) + GCT(', за да превземеш града!'),
+    GCT('Отговаряй на звънящите телефони ☎ за работа от шефа.'),
+    GCT('Метрото Ⓜ те превозва бързо — качи се от спирка.'),
     '',
-    'Ляв палец — движение / волан',
-    '🚗 влез/излез · 🔫 стрелба · 🛑 спирачка/дрифт · 🔁 оръжие',
-    'Внимавай: полицията арестува, а болницата взима живот.',
+    GCT('Ляв палец — движение / волан'),
+    GCT('🚗 влез/излез · 🔫 стрелба · 🛑 спирачка/дрифт · 🔁 оръжие'),
+    GCT('Внимавай: полицията арестува, а болницата взима живот.'),
     '',
-    'Докосни екрана, за да започнеш'
+    GCT('Докосни екрана, за да започнеш')
   ] : [
-    'Събери ' + fmtMoney(targetScore) + ', за да превземеш града!',
-    'Отговаряй на звънящите телефони ☎ за работа от шефа.',
-    'Метрото Ⓜ те превозва бързо — качи се от спирка.',
+    GCT('Събери ') + fmtMoney(targetScore) + GCT(', за да превземеш града!'),
+    GCT('Отговаряй на звънящите телефони ☎ за работа от шефа.'),
+    GCT('Метрото Ⓜ те превозва бързо — качи се от спирка.'),
     '',
-    'WASD / стрелки — движение и шофиране',
-    'E — влез/излез · F — стрелба · Q — оръжие · Space — спирачка/дрифт · P — пауза',
-    'Внимавай: полицията арестува, а болницата взима живот.',
+    GCT('WASD / стрелки — движение и шофиране'),
+    GCT('E — влез/излез · F — стрелба · Q — оръжие · Space — спирачка/дрифт · P — пауза'),
+    GCT('Внимавай: полицията арестува, а болницата взима живот.'),
     '',
-    'Натисни клавиш, за да започнеш'
+    GCT('Натисни клавиш, за да започнеш')
   ];
   lines.forEach((l, i) => ctx.fillText(l, VW / 2, VH * 0.5 + i * 22));
   if (scoreBest > 0) {
@@ -6473,18 +6474,18 @@ function drawStartScreen() {
   let py = VH * 0.5 + lines.length * 22 + 40;
   ctx.font = 'bold 14px sans-serif';
   ctx.fillStyle = '#ffd23c';
-  ctx.fillText('⭐ Ранг: ' + rankOf(meta.rankXp).name + ' (' + meta.rankXp + ' т.)', VW / 2, py); py += 21;
+  ctx.fillText(GCT('⭐ Ранг: ') + rankOf(meta.rankXp).name + ' (' + meta.rankXp + GCT(' т.)'), VW / 2, py); py += 21;
   ctx.font = '13px sans-serif';
   ctx.fillStyle = '#9fc4d8';
-  ctx.fillText('🚗 Колекция: ' + meta.collection.length + '/' + Object.keys(CAR_KINDS).length + ' модела', VW / 2, py); py += 20;
+  ctx.fillText(GCT('🚗 Колекция: ') + meta.collection.length + '/' + Object.keys(CAR_KINDS).length + GCT(' модела'), VW / 2, py); py += 20;
   const dTask = DAILY_TASKS[meta.daily.taskIdx];
   ctx.fillStyle = meta.daily.done ? '#7ee08a' : '#e8b800';
-  ctx.fillText('📅 Днес: ' + (meta.daily.done ? 'изпълнена ✓' : dTask.txt) +
-    (meta.daily.streak > 1 ? ' · серия ' + meta.daily.streak + ' дни' : ''), VW / 2, py); py += 20;
+  ctx.fillText(GCT('📅 Днес: ') + (meta.daily.done ? GCT('изпълнена ✓') : dTask.txt) +
+    (meta.daily.streak > 1 ? GCT(' · серия ') + meta.daily.streak + GCT(' дни') : ''), VW / 2, py); py += 20;
   const nextLock = THEMES.findIndex((t, i) => !cityUnlocked(i));
   if (nextLock >= 0) {
     ctx.fillStyle = '#b09040';
-    ctx.fillText('🔒 ' + THEMES[nextLock].name + ': още ' + (CITY_REQ[nextLock] - meta.metaMissions) + ' мисии', VW / 2, py);
+    ctx.fillText('🔒 ' + THEMES[nextLock].name + GCT(': още ') + (CITY_REQ[nextLock] - meta.metaMissions) + GCT(' мисии'), VW / 2, py);
   }
   ctx.textBaseline = 'top';
 }
@@ -6555,8 +6556,8 @@ function frame(now) {
         window._zoneMsgT = gameT;
         if (z >= 0) {
           const r = Math.round(respect[z]);
-          showMsg(GANGS[z].name + ' държат този район. Уважение: ' + (r > 0 ? '+' : '') + r +
-            (r <= -30 ? ' — ВНИМАВАЙ!' : ''), 2.5);
+          showMsg(GANGS[z].name + GCT(' държат този район. Уважение: ') + (r > 0 ? '+' : '') + r +
+            (r <= -30 ? GCT(' — ВНИМАВАЙ!') : ''), 2.5);
         }
       }
     }
