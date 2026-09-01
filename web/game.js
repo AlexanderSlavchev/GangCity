@@ -320,7 +320,14 @@ async function loadBoard() {
 // ---- Социално: профил, злато, магазин, банда, приятели, конструктор ----
 async function netMe(force) {
   if (!force && net.me && Date.now() - (net.meT || 0) < 15000) return net.me;
-  try { await netEnsure(); net.me = await api('/me', { id: net.id, token: net.token }); net.meT = Date.now(); } catch (e) {}
+  try {
+    await netEnsure(); net.me = await api('/me', { id: net.id, token: net.token }); net.meT = Date.now();
+    if (net.me.gifts && net.me.gifts.length) {
+      const g = net.me.gifts[0], nm = social.shop && social.shop[g.item] ? GCT(social.shop[g.item].name) : g.item;
+      social.giftNote = '🎁 ' + g.from_nick + GCT(' ти подари ') + nm + (net.me.gifts.length > 1 ? ' (+' + (net.me.gifts.length - 1) + ')' : '');
+      showMsg(social.giftNote, 4); AudioSys.gouranga();
+    }
+  } catch (e) {}
   return net.me;
 }
 async function netGold(kind) {
@@ -358,7 +365,7 @@ function askText(label, initial, cb, opts) {
   ok.onpointerdown = async () => { const err = await cb(inp.value.trim()); if (err) msg.textContent = err; else close(); };
   if (!opts.multi) inp.onkeydown = (e) => { if (e.key === 'Enter') ok.onpointerdown(); };
 }
-function crewTag() { return net.me && net.me.crew ? '[' + net.me.crew.name.replace(/\s+/g, '').slice(0, 4).toUpperCase() + '] ' : ''; }
+function crewTag() { return net.me && net.me.crew ? (net.me.crew.emblem || '') + '[' + net.me.crew.name.replace(/\s+/g, '').slice(0, 4).toUpperCase() + '] ' : ''; }
 function myDisplayNick() { return crewTag() + (net.me && net.me.badge ? net.me.badge : '') + (net.nick || GCT('Гангстер')); }
 
 /* ---- Екран: Общност ---- */
@@ -405,13 +412,25 @@ function drawCrewMenu() {
   } else {
     if (!social.crew || social.crew.id !== crew.id) { if (!social.busy) socialCall('/crew/' + crew.id, null, r => { social.crew = r; }); }
     ctx.fillStyle = crew.color; ctx.fillRect(0, 0, VW, 6);
-    ctx.font = 'bold 26px sans-serif'; ctx.fillStyle = '#ffd23c'; ctx.fillText('🏴 ' + crew.name, VW / 2, VH * 0.1);
+    ctx.font = 'bold 26px sans-serif'; ctx.fillStyle = '#ffd23c'; ctx.fillText((crew.emblem || '🏴') + ' ' + crew.name, VW / 2, VH * 0.1);
     ctx.font = '13px sans-serif'; ctx.fillStyle = '#8aa';
     ctx.fillText(GCT('Код за покана: ') + crew.id + (social.crew ? GCT('  ·  общо ') + fmtMoney(social.crew.total) : ''), VW / 2, VH * 0.1 + 26);
     let y = VH * 0.22;
     ctx.font = 'bold 13px sans-serif';
     menuBtn(GCT('📤 Сподели кода'), x, y, w / 2 - 5, 32, 'crewShare');
-    menuBtn(GCT('🚪 Напусни'), x + w / 2 + 5, y, w / 2 - 5, 32, 'crewLeave', 'danger'); y += 44;
+    menuBtn(GCT('🚪 Напусни'), x + w / 2 + 5, y, w / 2 - 5, 32, 'crewLeave', 'danger'); y += 40;
+    if (crew.leader === net.id) {
+      ctx.font = 'bold 13px sans-serif';
+      menuBtn((social.uniform ? '▾ ' : '👕 ') + GCT('Униформа на бандата') + ' (🪙 150)', x, y, w, 30, 'uniform', social.uniform ? '' : 'primary'); y += 36;
+      if (social.uniform) {
+        const EMB = ['🐺', '🦅', '🐍', '🦂', '🐉', '🦁', '⚡', '☠'], COLS = ['#3a6fb5', '#b53a3a', '#3a9b5a', '#a35ab5', '#e8a020', '#111418'];
+        const bw = (w - 7 * 6) / 8;
+        EMB.forEach((e, i) => menuBtn(e, x + i * (bw + 6), y, bw, 30, 'uemb:' + e, social.uEmb === e ? 'primary' : '')); y += 36;
+        const cw = (w - 5 * 6) / 6;
+        COLS.forEach((c, i) => { ctx.fillStyle = c; ctx.fillRect(x + i * (cw + 6), y, cw, 22); if (social.uCol === c) { ctx.strokeStyle = '#ffd23c'; ctx.lineWidth = 3; ctx.strokeRect(x + i * (cw + 6), y, cw, 22); } menuButtons.push({ x: x + i * (cw + 6), y, w: cw, h: 22, act: 'ucol:' + c }); }); y += 28;
+        menuBtn((social.uEmb || '?') + '  ' + GCT('КУПИ ЗА ЦЯЛАТА БАНДА'), x, y, w, 30, 'ubuy', social.uEmb && social.uCol ? 'primary' : ''); y += 36;
+      }
+    }
     const rowH = clamp((VH - y - 60) / 10, 20, 27);
     ctx.font = (rowH < 24 ? 12 : 13) + 'px sans-serif';
     for (const m of (social.crew ? social.crew.members : []).slice(0, 12)) {
@@ -525,40 +544,60 @@ function drawCreatorMenu() {
   ctx.textBaseline = 'top';
 }
 /* ---- Екран: Магазин ---- */
+const KIND_ICON = { paint: '🎨', badge: '🏅', glow: '💡', horn: '📣', title: '🏷' };
+function equipPayload(kind, itemId) {
+  // Текущо облечените предмети по вид + промяната
+  const me = net.me || {}, items = me.items || [], shop = social.shop || {};
+  const find = (k, val) => items.find(i => shop[i] && shop[i].kind === k && shop[i].value === val) || '';
+  const sel = { badge: find('badge', me.badge), paint: find('paint', me.paint), glow: find('glow', me.glow), horn: find('horn', me.horn), title: find('title', me.title) };
+  sel[kind] = itemId;
+  return sel;
+}
+function fmtLeft(ms) { const h = Math.max(0, Math.floor(ms / 3600000)); const d = Math.floor(h / 24); return d > 0 ? d + GCT('д ') + (h % 24) + GCT('ч') : h + GCT('ч ') + Math.floor((ms % 3600000) / 60000) + GCT('м'); }
 function drawShopMenu() {
   menuButtons = [];
   ctx.fillStyle = '#0a0a12'; ctx.fillRect(0, 0, VW, VH);
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  const w = Math.min(460, VW - 24), x = VW / 2 - w / 2;
-  ctx.font = 'bold 24px sans-serif'; ctx.fillStyle = '#ffd23c'; ctx.fillText(tr('shopT'), VW / 2, VH * 0.08);
-  ctx.font = 'bold 15px sans-serif'; ctx.fillStyle = '#ffd23c';
-  ctx.fillText('🪙 ' + (net.me ? net.me.gold : '...') + tr('gold'), VW / 2, VH * 0.08 + 28);
-  ctx.font = '11px sans-serif'; ctx.fillStyle = '#8aa';
-  ctx.fillText(GCT('Злато печелиш от дневни задачи, рангове, мисии и онлайн победи (до 60 на ден). Скоро: премиум градове и без реклами.'), VW / 2, VH * 0.08 + 46);
-  if (!social.shop) { fetch(API_BASE + '/api/shop').then(r => r.json()).then(r => { social.shop = r.items; }).catch(() => {}); }
-  const items = Object.entries(social.shop || {});
-  const cols = VW > VH * 1.25 ? 2 : 1;
-  const colW = cols === 2 ? (w - 10) / 2 : w;
+  const w = Math.min(500, VW - 24), x = VW / 2 - w / 2;
+  ctx.font = 'bold 22px sans-serif'; ctx.fillStyle = '#ffd23c'; ctx.fillText(tr('shopT'), VW / 2, VH * 0.07);
+  ctx.font = 'bold 14px sans-serif'; ctx.fillStyle = '#ffd23c';
+  ctx.fillText('🪙 ' + (net.me ? net.me.gold : '...') + tr('gold'), VW / 2 - 90, VH * 0.07 + 26);
+  if (!social.shop || Date.now() - (social.shopT || 0) > 60000) {
+    social.shopT = Date.now();
+    fetch(API_BASE + '/api/shop').then(r => r.json()).then(r => { social.shop = r.items; social.shopMeta = r; }).catch(() => {});
+  }
+  const meta2 = social.shopMeta;
+  ctx.fillStyle = '#7ee08a'; ctx.font = '12px sans-serif';
+  if (meta2 && meta2.weekEnds) ctx.fillText('🕒 ' + GCT('Ротацията сменя след ') + fmtLeft(meta2.weekEnds - Date.now()), VW / 2 + 90, VH * 0.07 + 26);
+  const items = Object.entries(social.shop || {}).filter(([id, it]) => it.base || (meta2 && meta2.featured && meta2.featured.includes(id)));
+  const cols = VW > VH * 1.25 ? 2 : 1, colW = cols === 2 ? (w - 10) / 2 : w;
   const rows = Math.ceil(items.length / cols);
-  const rh = clamp((VH - VH * 0.08 - 70 - 56) / rows - 6, 30, 44);
-  let y0 = VH * 0.08 + 66;
-  const owned = net.me ? net.me.items : [];
-  ctx.font = (rh < 36 ? 12 : 13) + 'px sans-serif';
+  const rh = clamp((VH - VH * 0.07 - 50 - 56) / Math.max(1, rows) - 5, 26, 40);
+  const y0 = VH * 0.07 + 46;
+  const me = net.me || {}, owned = me.items || [];
+  const fs2 = rh < 32 ? 11 : 12;
   items.forEach(([id, it], i) => {
-    const cx = x + (i % cols) * (colW + 10), cy = y0 + Math.floor(i / cols) * (rh + 6);
+    const cx = x + (i % cols) * (colW + 10), cy = y0 + Math.floor(i / cols) * (rh + 5);
     const has = owned.includes(id);
-    const equipped = net.me && ((it.kind === 'badge' && net.me.badge === it.value) || (it.kind === 'paint' && net.me.paint === it.value));
-    ctx.fillStyle = equipped ? 'rgba(126,224,138,0.12)' : 'rgba(255,255,255,0.05)'; ctx.fillRect(cx, cy, colW, rh);
-    if (it.kind === 'paint') { ctx.fillStyle = it.value; ctx.fillRect(cx + 8, cy + rh / 2 - 9, 18, 18); }
-    else { ctx.textAlign = 'left'; ctx.font = '18px sans-serif'; ctx.fillStyle = '#fff'; ctx.fillText(it.value, cx + 8, cy + rh / 2); ctx.font = (rh < 36 ? 12 : 13) + 'px sans-serif'; }
-    ctx.textAlign = 'left'; ctx.fillStyle = '#ddd'; ctx.fillText(it.name, cx + 34, cy + rh / 2);
-    ctx.font = 'bold 12px sans-serif';
-    if (equipped) menuBtn(tr('wearing'), cx + colW - 90, cy + 4, 84, rh - 8, 'unequip:' + it.kind);
-    else if (has) menuBtn(tr('equip'), cx + colW - 90, cy + 4, 84, rh - 8, 'equip:' + id, 'primary');
-    else menuBtn('🪙 ' + it.price, cx + colW - 90, cy + 4, 84, rh - 8, 'buy:' + id, net.me && net.me.gold >= it.price ? 'primary' : '');
-    ctx.font = (rh < 36 ? 12 : 13) + 'px sans-serif';
+    const equipped = me[it.kind] === it.value;
+    const left = it.limited && meta2 && meta2.limited ? meta2.limited[id] : null;
+    ctx.fillStyle = equipped ? 'rgba(126,224,138,0.12)' : it.limited ? 'rgba(255,210,60,0.08)' : 'rgba(255,255,255,0.05)'; ctx.fillRect(cx, cy, colW, rh);
+    if (it.limited) { ctx.strokeStyle = 'rgba(255,210,60,0.5)'; ctx.lineWidth = 1; ctx.strokeRect(cx, cy, colW, rh); }
+    ctx.textAlign = 'left';
+    if (it.kind === 'paint' || it.kind === 'glow') { ctx.fillStyle = it.value; ctx.beginPath(); ctx.arc(cx + 16, cy + rh / 2, 8, 0, Math.PI * 2); ctx.fill(); if (it.kind === 'glow') { ctx.strokeStyle = it.value; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx + 16, cy + rh / 2, 12, 0, Math.PI * 2); ctx.stroke(); } }
+    else { ctx.font = '16px sans-serif'; ctx.fillStyle = '#fff'; ctx.fillText(it.kind === 'badge' ? it.value : KIND_ICON[it.kind], cx + 7, cy + rh / 2); }
+    ctx.font = fs2 + 'px sans-serif'; ctx.fillStyle = '#ddd';
+    ctx.fillText(GCT(it.name) + (left != null ? '  · ' + GCT('още ') + left : ''), cx + 32, cy + rh / 2 - (it.kind === 'title' ? 0 : 0));
+    ctx.font = 'bold 11px sans-serif';
+    const bw = 58, gw = 34;
+    if (equipped) menuBtn(tr('wearing'), cx + colW - bw - gw - 8, cy + 3, bw, rh - 6, 'unequip:' + it.kind);
+    else if (has) menuBtn(tr('equip'), cx + colW - bw - gw - 8, cy + 3, bw, rh - 6, 'equip:' + id, 'primary');
+    else menuBtn('🪙 ' + it.price, cx + colW - bw - gw - 8, cy + 3, bw, rh - 6, 'buy:' + id, me.gold >= it.price ? 'primary' : '');
+    menuBtn('🎁', cx + colW - gw - 4, cy + 3, gw, rh - 6, 'gift:' + id);
+    ctx.font = fs2 + 'px sans-serif';
   });
   if (social.err) { ctx.textAlign = 'center'; ctx.fillStyle = '#e08080'; ctx.font = '12px sans-serif'; ctx.fillText(social.err, VW / 2, VH - 58); }
+  if (social.note) { ctx.textAlign = 'center'; ctx.fillStyle = '#7ee08a'; ctx.font = '12px sans-serif'; ctx.fillText(social.note, VW / 2, VH - 58); }
   ctx.font = 'bold 14px sans-serif';
   menuBtn(tr('back'), x, VH - 46, w, 36, 'back');
   ctx.textBaseline = 'top';
@@ -740,7 +779,7 @@ const MP = {
       case 'state': {
         const p = this.players.get(m.from);
         if (!p) break;
-        p.tx = m.x; p.ty = m.y; p.ta = m.a; p.car = m.car; p.pt = m.pt || ''; p.hp = m.hp; p.w = m.w; p.sc = m.sc; p.dead = m.dead; p.lastT = gameT;
+        p.tx = m.x; p.ty = m.y; p.ta = m.a; p.car = m.car; p.pt = m.pt || ''; p.gl = m.gl || ''; p.tt = m.tt || ''; p.hp = m.hp; p.w = m.w; p.sc = m.sc; p.dead = m.dead; p.lastT = gameT;
         if (!p.seen) { p.seen = true; p.x = m.x; p.y = m.y; p.a = m.a; }
         break;
       }
@@ -759,6 +798,8 @@ const MP = {
       if (dist2(m.x, m.y, player.x, player.y) < 700 * 700) AudioSys.tone({ f0: 900, f1: 200, dur: 0.06, vol: 0.05, type: 'square' });
     } else if (m.kind === 'hit' && m.to === this.sid) {
       if (this.rules && this.rules.ff && !player.dead) { this.lastHitBy = m.from; damagePlayer(m.dmg || 10); FX.blood(player.x, player.y); }
+    } else if (m.kind === 'horn') {
+      if (dist2(m.x, m.y, player.x, player.y) < 900 * 900) playHorn(m.hn);
     } else if (m.kind === 'boom') {
       explode(m.x, m.y, false);
     } else if (m.kind === 'died') {
@@ -801,7 +842,7 @@ const MP = {
     if (now - this.lastSend > 50) {
       this.lastSend = now;
       this.send({ t: 'state', x: Math.round(player.x), y: Math.round(player.y), a: +player.angle.toFixed(2),
-        car: player.car ? player.car.kind : null, pt: player.car ? player.car.color : '', hp: Math.round(player.hp), w: player.weapon, sc: this.myScore(), dead: player.dead });
+        car: player.car ? player.car.kind : null, pt: player.car ? player.car.color : '', gl: net.me ? net.me.glow || '' : '', tt: net.me ? net.me.title || '' : '', hp: Math.round(player.hp), w: player.weapon, sc: this.myScore(), dead: player.dead });
     }
     const k = Math.min(1, dt * 12);
     for (const p of this.players.values()) {
@@ -886,6 +927,7 @@ const MP = {
       };
       for (const e of ['👋', '😂', '🔥', '💀', '🏁']) w.appendChild(mkBtn(e, () => this.say(e)));
       if (this.rules && this.rules.chat) w.appendChild(mkBtn('💬', () => this.openChat(), ';font-size:18px'));
+      if (net.me && net.me.horn) w.appendChild(mkBtn('📣', () => { if (!player.car) return; playHorn(net.me.horn); this.send({ t: 'ev', kind: 'horn', hn: net.me.horn, x: Math.round(player.x), y: Math.round(player.y) }); }, ';font-size:18px'));
       const miniW = clamp(Math.min(VW, VH) * 0.22, 90, 150) + 24;
       const q = mkBtn(GCT('✕ Излез'), () => this.leaveGame(), ';font:700 12px sans-serif;color:#e08080;border-color:#e05a5a;height:30px;border-radius:6px');
       q.style.position = 'fixed'; q.style.right = miniW + 'px'; q.style.top = '8px'; q.style.zIndex = 30;
@@ -902,6 +944,7 @@ const MP = {
       const s = worldToScreen(p.x, p.y);
       if (s.x < -80 || s.y < -80 || s.x > VW + 80 || s.y > VH + 80) continue;
       if (p.car) {
+        if (p.gl) drawGlow(p.x, p.y, p.a, p.gl);
         let fc = this.fakeCars.get(sid);
         if (!fc || fc.kind !== p.car || (p.pt && fc.color !== p.pt)) { fc = makeCar(p.x, p.y, p.a, p.car); fc.parked = true; if (p.pt) fc.color = p.pt; this.fakeCars.set(sid, fc); }
         fc.x = p.x; fc.y = p.y; fc.angle = p.a; fc.speed = 0;
@@ -920,6 +963,7 @@ const MP = {
       const tw = ctx.measureText(p.nick).width + 10;
       ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(s.x - tw / 2, ty - 15, tw, 15);
       ctx.fillStyle = '#ffd23c'; ctx.fillText(p.nick, s.x, ty - 2);
+      if (p.tt) { ctx.font = 'italic ' + Math.round(9 * camZoom + 2) + 'px sans-serif'; ctx.fillStyle = '#9fc4d8'; ctx.fillText(GCT(p.tt), s.x, ty - 15); }
       ctx.fillStyle = '#400'; ctx.fillRect(s.x - 16, ty + 1, 32, 3);
       ctx.fillStyle = '#e33'; ctx.fillRect(s.x - 16, ty + 1, 32 * clamp(p.hp / 100, 0, 1), 3);
       if (p.bubbleT > 0) drawBubble(p.bubble, s.x, ty - 18, p.bubbleT);
@@ -986,6 +1030,22 @@ const MP = {
   },
   fetchStats() { fetch(API_BASE + '/api/online').then(r => r.json()).then(j => { this.stats = j; }).catch(() => { this.stats = null; }); },
 };
+function drawGlow(x, y, a, color) {
+  const s = worldToScreen(x, y);
+  ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(a); ctx.scale(camZoom, camZoom);
+  ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.55;
+  const g = ctx.createRadialGradient(0, 0, 8, 0, 0, 34);
+  g.addColorStop(0, color); g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(0, 0, 36, 24, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+function drawOwnGlow() { if (player.car && net.me && net.me.glow) drawGlow(player.car.x, player.car.y, player.car.angle, net.me.glow); }
+function playHorn(kind) {
+  const T = (f0, f1, dur, vol, type, delay) => setTimeout(() => AudioSys.tone({ f0, f1, dur, vol, type }), delay || 0);
+  if (kind === 'truck') { T(110, 105, 0.7, 0.18, 'sawtooth'); T(165, 160, 0.7, 0.12, 'sawtooth'); }
+  else if (kind === 'melody') { [[523, 0], [523, 120], [523, 240], [698, 360], [880, 560], [523, 800], [523, 920], [523, 1040], [698, 1160], [880, 1360]].forEach(([f, d]) => T(f, f, 0.16, 0.12, 'square', d)); }
+  else { T(440, 440, 0.28, 0.14, 'square'); T(554, 554, 0.28, 0.1, 'square'); }
+}
 function drawBubble(text, x, y, tLeft) {
   const emojiOnly = !/[\p{L}\p{N}]/u.test(text);
   ctx.globalAlpha = clamp(tLeft / 0.6, 0, 1);
@@ -1355,6 +1415,7 @@ function drawMainMenu() {
     '  ·  🏙 ' + THEMES.filter((t, i) => cityUnlocked(i)).length + '/' + THEMES.length + (net.me ? '  ·  🪙 ' + net.me.gold : ''), VW / 2, VH * 0.2 + 46);
   ctx.font = 'bold 12px sans-serif';
   menuBtn('✎ ' + (net.nick || tr('pickNick')), VW / 2 - 80, VH * 0.2 + 62, 160, 26, 'nick');
+  if (social.giftNote) { ctx.fillStyle = '#7ee08a'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(social.giftNote, VW / 2, VH * 0.2 + 96); }
   // Адаптивно: в пейзаж бутоните са в две колони, така че всичко се побира на екрана
   const sv = hasSave();
   const items = [];
@@ -1465,9 +1526,14 @@ function menuTapAct(hit) {
   else if (hit === 'ugcTest') { playUgc({ title: social.title || GCT('Проба'), author: net.nick, code: null, def: { ...social.def, reward: ugcReward(social.def) } }); }
   else if (hit.startsWith('ugcPlay:')) { const u = (social.list || []).find(x => x.code === hit.slice(8)); if (u) playUgc({ title: u.title, author: u.author_nick, code: u.code, def: u.def }); }
   else if (hit.startsWith('ugcLike:')) { socialCall('/ugc/like', { code: hit.slice(8) }, () => { social.list = null; }); }
-  else if (hit.startsWith('buy:')) { socialCall('/shop/buy', { item: hit.slice(4) }, r => { net.me = r.me; net.meT = Date.now(); }); }
-  else if (hit.startsWith('equip:')) { const id = hit.slice(6), it = (social.shop || {})[id]; if (!it) return; const cur = net.me || {}; const badge = it.kind === 'badge' ? id : (cur.items || []).find(i => social.shop[i] && social.shop[i].kind === 'badge' && social.shop[i].value === cur.badge) || ''; const paint = it.kind === 'paint' ? id : (cur.items || []).find(i => social.shop[i] && social.shop[i].kind === 'paint' && social.shop[i].value === cur.paint) || ''; socialCall('/shop/equip', { badge, paint }, r => { net.me = r.me; net.meT = Date.now(); }); }
-  else if (hit.startsWith('unequip:')) { const kind = hit.slice(8), cur = net.me || {}; const badge = kind === 'badge' ? '' : (cur.items || []).find(i => social.shop[i] && social.shop[i].kind === 'badge' && social.shop[i].value === cur.badge) || ''; const paint = kind === 'paint' ? '' : (cur.items || []).find(i => social.shop[i] && social.shop[i].kind === 'paint' && social.shop[i].value === cur.paint) || ''; socialCall('/shop/equip', { badge, paint }, r => { net.me = r.me; net.meT = Date.now(); }); }
+  else if (hit.startsWith('buy:')) { social.note = null; socialCall('/shop/buy', { item: hit.slice(4) }, r => { net.me = r.me; net.meT = Date.now(); social.shopT = 0; }); }
+  else if (hit.startsWith('equip:')) { const id = hit.slice(6), it = (social.shop || {})[id]; if (!it) return; socialCall('/shop/equip', equipPayload(it.kind, id), r => { net.me = r.me; net.meT = Date.now(); }); }
+  else if (hit.startsWith('unequip:')) { socialCall('/shop/equip', equipPayload(hit.slice(8), ''), r => { net.me = r.me; net.meT = Date.now(); }); }
+  else if (hit.startsWith('gift:')) { const id = hit.slice(5), it = (social.shop || {})[id]; if (!it) return; askText(GCT('🎁 Подарък: ') + GCT(it.name) + ' (🪙 ' + it.price + ') — ' + GCT('код на приятеля'), '', async (v) => { const r = await socialCall('/shop/gift', { item: id, code: v }); if (!r) return social.err; net.me = r.me; net.meT = Date.now(); social.note = GCT('🎁 Подарено на ') + r.nick + '!'; social.shopT = 0; return null; }, { max: 6, upper: true, okLabel: GCT('Подари') }); }
+  else if (hit === 'uniform') { social.uniform = !social.uniform; }
+  else if (hit.startsWith('uemb:')) { social.uEmb = hit.slice(5); }
+  else if (hit.startsWith('ucol:')) { social.uCol = hit.slice(5); }
+  else if (hit === 'ubuy') { socialCall('/crew/uniform', { emblem: social.uEmb, color: social.uCol }, async r => { net.me = r.me; net.meT = Date.now(); social.uniform = false; social.crew = null; }); }
   else if (hit === 'back') { menuState = 'main'; resetArmed = 0; }
   else if (hit.startsWith('toggle:')) { const k = hit.slice(7); settings[k] = !settings[k]; saveSettings(); applySettings(); }
   else if (hit === 'reset') {
@@ -6620,6 +6686,7 @@ function frame(now) {
   for (const c of cars) drawCar(c);
   for (const p of peds) if (!p.dead) drawPed(p);
   drawPlayer();
+  drawOwnGlow();
   MP.draw();
   drawProjectiles();
   drawParticles();
