@@ -262,6 +262,112 @@ window.onAdReward = function (hook) {
   }
 };
 
+/* ---------------- Онлайн: профил, класации (gangcity.tvorum.bg) ---------------- */
+const API_BASE = 'https://gangcity.tvorum.bg';
+const net = { id: null, token: null, nick: null, board: null, busy: false, err: null, pos: null, players: 0 };
+try { Object.assign(net, JSON.parse(localStorage.getItem('gangcity_net') || '{}'), { board: null, busy: false, err: null }); } catch (e) {}
+function netSave() { try { localStorage.setItem('gangcity_net', JSON.stringify({ id: net.id, token: net.token, nick: net.nick, pos: net.pos })); } catch (e) {} }
+async function api(path, body) {
+  const r = await fetch(API_BASE + '/api' + path, body
+    ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }
+    : { method: 'GET' });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+  return j;
+}
+async function netEnsure() {
+  if (net.id && net.token) return;
+  const r = await api('/register', { nick: net.nick || '' });
+  net.id = r.id; net.token = r.token; net.nick = r.nick;
+  netSave();
+}
+// Всичко долу е "най-добро усилие": без връзка просто мълчи, играта не зависи от сървъра.
+async function netSubmit() {
+  try {
+    await netEnsure();
+    const r = await api('/score', { id: net.id, token: net.token, score, missions: meta.metaMissions,
+      rank: rankOf(meta.rankXp).name, city: cityIdx, collection: meta.collection.length });
+    net.pos = r.position; netSave();
+  } catch (e) {}
+}
+async function netMission(idx, seconds) {
+  try { await netEnsure(); await api('/mission', { id: net.id, token: net.token, mission: idx, seconds }); } catch (e) {}
+}
+async function netDaily(date, task, seconds) {
+  try { await netEnsure(); await api('/daily', { id: net.id, token: net.token, date, task, seconds }); } catch (e) {}
+}
+async function loadBoard() {
+  if (net.busy) return;
+  net.busy = true; net.err = null;
+  try {
+    await netEnsure();
+    await netSubmit();
+    const r = await api('/leaderboard?limit=10');
+    net.board = r.top; net.players = r.players;
+    try { const d = await api('/daily?date=' + dailyKey(0)); net.dailyCount = d.count; } catch (e) {}
+  } catch (e) { net.err = 'Няма връзка със сървъра.'; }
+  net.busy = false;
+}
+// Смяна на прякор — през HTML поле, защото на canvas няма клавиатура
+function editNick() {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'position:fixed;inset:0;z-index:40;background:rgba(5,5,12,.9);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;font-family:sans-serif';
+  const lbl = document.createElement('div'); lbl.textContent = 'Прякор (2–16 знака)'; lbl.style.cssText = 'color:#ffd23c;font-weight:700';
+  const inp = document.createElement('input'); inp.maxLength = 16; inp.value = net.nick || '';
+  inp.style.cssText = 'font-size:18px;padding:10px 12px;border-radius:6px;border:1px solid #ffd23c;background:#111;color:#fff;width:min(80vw,280px);text-align:center';
+  const row = document.createElement('div'); row.style.cssText = 'display:flex;gap:10px';
+  const mk = (t, bg) => { const b = document.createElement('div'); b.textContent = t; b.style.cssText = 'padding:10px 18px;border-radius:6px;font-weight:700;background:' + bg + ';color:#111'; return b; };
+  const ok = mk('Запази', '#ffd23c'), no = mk('Отказ', '#888');
+  const msg = document.createElement('div'); msg.style.cssText = 'color:#e08080;font-size:13px;min-height:16px';
+  row.append(ok, no); wrap.append(lbl, inp, row, msg); document.body.appendChild(wrap);
+  setTimeout(() => inp.focus(), 50);
+  no.onclick = () => wrap.remove();
+  ok.onclick = async () => {
+    try {
+      await netEnsure();
+      const r = await api('/nick', { id: net.id, token: net.token, nick: inp.value });
+      net.nick = r.nick; netSave(); net.board = null; wrap.remove();
+    } catch (e) { msg.textContent = e.message; }
+  };
+}
+function drawBoardMenu() {
+  menuButtons = [];
+  ctx.fillStyle = '#0a0a12'; ctx.fillRect(0, 0, VW, VH);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = 'bold 26px sans-serif'; ctx.fillStyle = '#ffd23c';
+  ctx.fillText('🏆 КЛАСАЦИЯ', VW / 2, VH * 0.09);
+  if (!net.board && !net.busy && !net.err) loadBoard();
+  const w = Math.min(420, VW - 30), x = VW / 2 - w / 2;
+  const rowH = clamp((VH * 0.70) / 12, 20, 30), fs2 = rowH < 24 ? 12 : 14;
+  let y = VH * 0.17;
+  ctx.font = fs2 + 'px sans-serif';
+  if (net.busy) { ctx.fillStyle = '#aaa'; ctx.fillText('Зареждам...', VW / 2, y + 20); }
+  else if (net.err) { ctx.fillStyle = '#e08080'; ctx.fillText(net.err + ' Тапни, за да опиташ пак.', VW / 2, y + 20); menuButtons.push({ x: 0, y: 0, w: VW, h: VH * 0.6, act: 'retry' }); }
+  else if (net.board) {
+    for (let i = 0; i < net.board.length; i++) {
+      const p = net.board[i], me = p.id === net.id;
+      ctx.fillStyle = me ? 'rgba(255,210,60,0.18)' : (i % 2 ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.07)');
+      ctx.fillRect(x, y, w, rowH - 2);
+      ctx.textAlign = 'left'; ctx.fillStyle = me ? '#ffd23c' : (i < 3 ? '#fff' : '#ccc');
+      ctx.font = (i < 3 || me ? 'bold ' : '') + fs2 + 'px sans-serif';
+      ctx.fillText((i + 1) + '. ' + p.nick + (p.rank ? '  · ' + p.rank : ''), x + 10, y + rowH / 2 - 1);
+      ctx.textAlign = 'right';
+      ctx.fillText(fmtMoney(p.best) + '  · ' + p.missions + ' мис.', x + w - 10, y + rowH / 2 - 1);
+      y += rowH;
+    }
+    ctx.textAlign = 'center'; ctx.font = '13px sans-serif'; ctx.fillStyle = '#8aa';
+    y += 8;
+    ctx.fillText('Играчи: ' + net.players + (net.pos ? '  ·  Ти си #' + net.pos : '') +
+      (net.dailyCount != null ? '  ·  Дневната днес: ' + net.dailyCount + ' души' : ''), VW / 2, y); y += 22;
+  }
+  const bh = clamp(rowH + 10, 32, 42);
+  y = Math.max(y + 6, VH - bh * 2 - 22);
+  ctx.font = 'bold 14px sans-serif';
+  menuBtn('✎ Прякор: ' + (net.nick || 'Гангстер'), x, y, w / 2 - 5, bh, 'nick'); 
+  menuBtn('← НАЗАД', x + w / 2 + 5, y, w / 2 - 5, bh, 'back');
+  ctx.textBaseline = 'top';
+}
+
 /* ---------------- Настройки ---------------- */
 const settings = { sfx: true, music: true, vibro: true, lowFx: false, bigCtrl: false, splitCar: true };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('gangcity_settings') || '{}')); } catch (e) {}
@@ -302,6 +408,7 @@ function drawMainMenu() {
   const sv = hasSave();
   if (sv) { menuBtn('▶  ПРОДЪЛЖИ', x, y, w, h, 'continue', 'primary'); y += h + 14; }
   menuBtn('✦  НОВА ИГРА', x, y, w, h, 'new', sv ? '' : 'primary'); y += h + 14;
+  menuBtn('🏆  КЛАСАЦИЯ', x, y, w, h, 'board'); y += h + 14;
   menuBtn('⚙  НАСТРОЙКИ', x, y, w, h, 'settings'); y += h + 14;
   if (scoreBest > 0) { ctx.font = '13px sans-serif'; ctx.fillStyle = '#7ee08a'; ctx.fillText('Рекорд: ' + fmtMoney(scoreBest), VW / 2, y + 10); }
   ctx.textBaseline = 'top';
@@ -361,6 +468,9 @@ function menuTapAct(hit) {
     try { localStorage.removeItem('gangcity_auto'); localStorage.removeItem('gangcity_save'); } catch (e) {}
     restartGame(); runLoaded = true; menuState = 'cities';
   } else if (hit === 'settings') { menuState = 'settings'; resetArmed = 0; }
+  else if (hit === 'board') { menuState = 'board'; net.board = null; net.err = null; }
+  else if (hit === 'retry') { net.err = null; net.board = null; }
+  else if (hit === 'nick') { editNick(); }
   else if (hit === 'back') { menuState = 'main'; resetArmed = 0; }
   else if (hit.startsWith('toggle:')) { const k = hit.slice(7); settings[k] = !settings[k]; saveSettings(); applySettings(); }
   else if (hit === 'reset') {
@@ -513,6 +623,7 @@ function dailyProgress(id, amt) {
     const rew = meta.daily.streak >= 5 ? 3000 : 1500;
     addScore(rew, player.x, player.y - 24);
     addRankXp(10);
+    netDaily(meta.daily.date, meta.daily.taskIdx, Math.round(gameT));
     showMsg('📅 Дневна задача изпълнена! +' + fmtMoney(rew) +
       (meta.daily.streak > 1 ? ' · Серия: ' + meta.daily.streak + ' дни' : ''), 4);
   } else {
@@ -2171,6 +2282,7 @@ function startMission() {
   mission.checkpoints = []; mission.target = null; mission.drop = null; mission.gear = null;
   if (!setupMission(m)) { mission.cooldown = 3; return; }
   mission.active = true;
+  mission.startedAt = gameT;
   mission.text = (idx + 1) + '/' + MISSION_TABLE.length + (cycle ? ' (кръг ' + (cycle + 1) + ')' : '') + ' · ' + mission.text;
   mission.reward = Math.floor(mission.reward * (theme.payMult || 1));   // по-далечният град плаща повече
   mission.gang = (mission.gangHint !== undefined && mission.gangHint >= 0) ? mission.gangHint : -1;
@@ -2195,6 +2307,8 @@ function endMission(win) {
     addRankXp(15);
     dailyProgress('missions', 1);
     autosaveRun();
+    netSubmit();
+    if (mission.tableIdx != null) netMission(mission.tableIdx, Math.max(1, Math.round(gameT - (mission.startedAt || gameT))));
     addScore(mission.reward, player.x, player.y - 20);
     let extra = '';
     if (player.wanted > 0) { player.heat = 0; recalcWanted(); extra = ' · Ченгетата те забравиха'; }
@@ -5224,6 +5338,7 @@ function drawTouchControls() {
 function drawStartScreen() {
   if (menuState === 'main') { drawMainMenu(); return; }
   if (menuState === 'settings') { drawSettingsMenu(); return; }
+  if (menuState === 'board') { drawBoardMenu(); return; }
   menuButtons = [];
   ctx.fillStyle = '#0a0a12';
   ctx.fillRect(0, 0, VW, VH);
