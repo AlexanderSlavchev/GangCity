@@ -11,6 +11,19 @@
 </head>
 <body>
 <canvas id="game"></canvas>
-<script src="game.js"></script>
+<script>
+// Ако играта гръмне при зареждане, показваме грешката вместо черен екран
+window.addEventListener('error', function (e) {
+  try {
+    var c = document.getElementById('game'); var x = c.getContext('2d');
+    c.width = innerWidth; c.height = innerHeight;
+    x.fillStyle = '#300'; x.fillRect(0, 0, c.width, c.height);
+    x.fillStyle = '#fff'; x.font = '14px monospace';
+    var lines = ['GangCity: грешка при зареждане', String(e.message), (e.filename || '') + ':' + e.lineno + ':' + e.colno, '', 'Снимай този екран и го прати.'];
+    lines.forEach(function (l, i) { x.fillText(l, 12, 30 + i * 22); });
+  } catch (err) {}
+});
+</script>
+<script src="game.js?v=202609011256"></script>
 </body>
 </html>
