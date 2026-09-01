@@ -23,7 +23,15 @@ const DIR_ANG = [0, Math.PI / 2, Math.PI, -Math.PI / 2];
 // ---------------- Помощни ----------------
 let seed = 20977;
 function rnd() { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; }
-const R = Math.random;
+let R = Math.random;
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
 const clamp = (v, a, b) => v < a ? a : (v > b ? b : v);
 const dist2 = (ax, ay, bx, by) => { const dx = ax - bx, dy = ay - by; return dx * dx + dy * dy; };
 function angDiff(a, b) {
@@ -368,6 +376,392 @@ function drawBoardMenu() {
   ctx.textBaseline = 'top';
 }
 
+/* ---------------- МУЛТИПЛЕЙЪР ---------------- */
+const WS_URL = API_BASE.replace(/^http/, 'ws') + '/ws';
+const MP_MODES = { free: 'Свободен град', cash: 'Богаташ', bounty: 'Лов на глави' };
+const MP_MODE_DESC = { free: 'Без край и без правила — градът е ваш.', cash: 'Кой ще изкара най-много пари до края на времето.', bounty: 'Кой ще свали най-много съперници.' };
+const MP_CYCLE = { map: ['sofia', 'ruse'], mode: ['free', 'cash', 'bounty'], minutes: [3, 5, 10], police: [true, false], ff: [true, false], traffic: [1, 0.4, 0], weapons: ['all', 'pistol'] };
+const MP_LABEL = {
+  map: v => v === 'ruse' ? 'Русе' : 'София', mode: v => MP_MODES[v], minutes: v => v + ' мин',
+  police: v => v ? 'Има' : 'Няма', ff: v => v ? 'Вкл' : 'Изкл', traffic: v => v === 1 ? 'Нормален' : v === 0.4 ? 'Рядък' : 'Няма',
+  weapons: v => v === 'all' ? 'Пълен арсенал' : 'Само пистолет',
+};
+const MP = {
+  ws: null, connected: false, active: false, sid: 0, lobby: null, players: new Map(),
+  stats: null, statsT: 0, err: null, lastSend: 0, rules: null, seed: 0, joining: false,
+  startScore: 0, kills: 0, deaths: 0, timeLeft: 0, results: null, lastHitBy: 0,
+  savedLives: 4, savedTarget: 60000, emoteWrap: null, leaveBtn: null, fakeCars: new Map(),
+  myBubble: '', myBubbleT: 0, pendingCb: null,
+  connect(cb) {
+    if (this.ws && this.ws.readyState === 1) { if (cb) cb(); return; }
+    if (this.ws && this.ws.readyState === 0) { this.pendingCb = cb; return; }
+    this.err = null;
+    try { this.ws = new WebSocket(WS_URL); } catch (e) { this.err = 'Няма връзка със сървъра.'; this.joining = false; return; }
+    this.ws.onopen = () => { this.connected = true; const c = cb || this.pendingCb; this.pendingCb = null; if (c) c(); };
+    this.ws.onmessage = (e) => { try { this.handle(JSON.parse(e.data)); } catch (err) {} };
+    this.ws.onclose = () => {
+      this.connected = false; this.joining = false;
+      if (this.active) { showMsg('Връзката със сървъра прекъсна.', 3); this.endGame('lost'); }
+      else if (menuState === 'lobby') { this.err = 'Връзката прекъсна.'; this.lobby = null; menuState = 'online'; }
+    };
+    this.ws.onerror = () => { this.err = 'Няма връзка със сървъра.'; this.joining = false; };
+  },
+  send(o) { if (this.ws && this.ws.readyState === 1) this.ws.send(JSON.stringify(o)); },
+  nick() { return net.nick || 'Гангстер'; },
+  joinPublic(room) { this.joining = true; this.err = null; this.connect(() => this.send({ t: 'join', room, nick: this.nick() })); },
+  createPrivate() { this.joining = true; this.err = null; this.connect(() => this.send({ t: 'create', nick: this.nick() })); },
+  joinCode(code) { this.joining = true; this.err = null; this.connect(() => this.send({ t: 'joinCode', code, nick: this.nick() })); },
+  leaveRoom() { this.send({ t: 'leave' }); this.lobby = null; this.players.clear(); this.fakeCars.clear(); this.joining = false; },
+  isHost() { return !!(this.lobby && this.lobby.host === this.sid); },
+  myReady() { const me = this.lobby && this.lobby.players.find(p => p.sid === this.sid); return !!(me && me.ready); },
+  cycle(k) {
+    if (!this.isHost() || !this.lobby) return;
+    const arr = MP_CYCLE[k], cur = this.lobby.settings[k];
+    const i = arr.indexOf(cur);
+    this.send({ t: 'settings', [k]: arr[(i + 1) % arr.length] });
+  },
+  handle(m) {
+    switch (m.t) {
+      case 'welcome':
+        this.sid = m.you; this.joining = false; this.lobby = m; this.players.clear();
+        for (const p of m.players) if (p.sid !== this.sid) this.players.set(p.sid, this.newRemote(p.nick));
+        if (m.kind === 'pub') this.startGame(m.settings, m.seed); else menuState = 'lobby';
+        break;
+      case 'lobby':
+        this.lobby = m;
+        for (const p of m.players) if (p.sid !== this.sid && !this.players.has(p.sid)) this.players.set(p.sid, this.newRemote(p.nick));
+        for (const sid of [...this.players.keys()]) if (!m.players.some(p => p.sid === sid)) { this.players.delete(sid); this.fakeCars.delete(sid); }
+        break;
+      case 'join':
+        if (m.from !== this.sid) { this.players.set(m.from, this.newRemote(m.nick)); if (this.active) showMsg('👋 ' + m.nick + ' влезе в града', 2.5); }
+        break;
+      case 'leave': {
+        const p = this.players.get(m.from);
+        if (p && this.active) showMsg(p.nick + ' напусна', 2);
+        this.players.delete(m.from); this.fakeCars.delete(m.from);
+        break;
+      }
+      case 'state': {
+        const p = this.players.get(m.from);
+        if (!p) break;
+        p.tx = m.x; p.ty = m.y; p.ta = m.a; p.car = m.car; p.hp = m.hp; p.w = m.w; p.sc = m.sc; p.dead = m.dead; p.lastT = gameT;
+        if (!p.seen) { p.seen = true; p.x = m.x; p.y = m.y; p.a = m.a; }
+        break;
+      }
+      case 'ev': this.onEvent(m); break;
+      case 'start': if (this.lobby) this.lobby.started = true; this.startGame(m.settings, m.seed); break;
+      case 'end': if (this.active && !this.results) this.finishMatch(true); break;
+      case 'full': this.err = 'Стаята е пълна (12 души).'; this.joining = false; break;
+      case 'nocode': this.err = 'Няма стая с този код.'; this.joining = false; break;
+    }
+  },
+  newRemote(nick) { return { nick, x: 0, y: 0, a: 0, tx: 0, ty: 0, ta: 0, car: null, hp: 100, w: 1, sc: 0, dead: false, seen: false, bubble: '', bubbleT: 0, lastT: 0 }; },
+  onEvent(m) {
+    const p = this.players.get(m.from);
+    if (m.kind === 'shot') {
+      FX.sparks(m.x + Math.cos(m.a) * 14, m.y + Math.sin(m.a) * 14);
+      if (dist2(m.x, m.y, player.x, player.y) < 700 * 700) AudioSys.tone({ f0: 900, f1: 200, dur: 0.06, vol: 0.05, type: 'square' });
+    } else if (m.kind === 'hit' && m.to === this.sid) {
+      if (this.rules && this.rules.ff && !player.dead) { this.lastHitBy = m.from; damagePlayer(m.dmg || 10); FX.blood(player.x, player.y); }
+    } else if (m.kind === 'boom') {
+      explode(m.x, m.y, false);
+    } else if (m.kind === 'died') {
+      if (m.by === this.sid) { this.kills++; showMsg('💀 Свали ' + (p ? p.nick : 'съперник') + '!  (' + this.kills + ')', 2.5); AudioSys.gouranga(); }
+      if (p) p.dead = true;
+    } else if (m.kind === 'chat' && p) { p.bubble = m.text; p.bubbleT = 3; }
+  },
+  onDeath() { this.deaths++; this.send({ t: 'ev', kind: 'died', by: this.lastHitBy || 0 }); this.lastHitBy = 0; },
+  startGame(settings, seed) {
+    this.rules = settings; this.seed = seed; this.active = true;
+    this.startScore = score; this.kills = 0; this.deaths = 0; this.results = null; this.lastHitBy = 0;
+    this.savedLives = lives; lives = 99; this.savedTarget = targetScore; targetScore = 1e12;
+    for (const p of this.players.values()) p.seen = false;
+    this.fakeCars.clear();
+    R = mulberry32(seed >>> 0);                       // всички генерират ЕДНАКЪВ град
+    genCityMap(settings.map === 'ruse' ? 1 : 0);
+    R = Math.random;
+    playerToStart(); spawnWorld();
+    player.x += (R() - 0.5) * 90; player.y += (R() - 0.5) * 60;
+    if (settings.traffic < 1) for (let i = cars.length - 1; i >= 0; i--) if (!cars[i].parked && R() > settings.traffic) cars.splice(i, 1);
+    if (settings.weapons === 'all') { player.ammo = [-1, 80, 150, 60, 8, 10, 80]; player.weapon = 2; }
+    player.hp = 100; player.armor = 0; player.dead = false; player.busted = false; player.heat = 0; recalcWanted();
+    mission.active = false; mission.cooldown = 20;
+    this.timeLeft = settings.mode === 'free' ? 0 : settings.minutes * 60;
+    started = true; paused = false; gameOver = false;
+    AudioSys.init(); MusicSys.start();
+    this.ui(true);
+    showMsg('🌐 ' + MP_MODES[settings.mode] + (this.timeLeft ? ' · ' + settings.minutes + ' мин' : '') + ' · ' + this.players.size + (this.players.size === 1 ? ' съперник' : ' съперници'), 4);
+  },
+  update(dt) {
+    if (!this.active) return;
+    const now = performance.now();
+    if (now - this.lastSend > 50) {
+      this.lastSend = now;
+      this.send({ t: 'state', x: Math.round(player.x), y: Math.round(player.y), a: +player.angle.toFixed(2),
+        car: player.car ? player.car.kind : null, hp: Math.round(player.hp), w: player.weapon, sc: this.myScore(), dead: player.dead });
+    }
+    const k = Math.min(1, dt * 12);
+    for (const p of this.players.values()) {
+      p.x += (p.tx - p.x) * k; p.y += (p.ty - p.y) * k;
+      p.a += angDiff(p.a, p.ta) * k;
+      if (p.bubbleT > 0) p.bubbleT -= dt;
+    }
+    if (this.myBubbleT > 0) this.myBubbleT -= dt;
+    if (this.timeLeft > 0 && !this.results) {
+      this.timeLeft -= dt;
+      if (this.timeLeft <= 0) { this.timeLeft = 0; this.finishMatch(false); }
+    }
+  },
+  myScore() {
+    if (!this.rules) return 0;
+    return this.rules.mode === 'bounty' ? this.kills : this.rules.mode === 'cash' ? Math.max(0, score - this.startScore) : 0;
+  },
+  standings() {
+    const rows = [{ sid: this.sid, nick: this.nick(), sc: this.myScore(), me: true }];
+    for (const [sid, p] of this.players) rows.push({ sid, nick: p.nick, sc: p.sc || 0, me: false });
+    rows.sort((a, b) => b.sc - a.sc);
+    return rows;
+  },
+  finishMatch(byHost) {
+    if (this.results) return;
+    const rows = this.standings();
+    this.results = { rows, t: 0, winner: rows[0] };
+    if (rows[0].me && this.rules.mode !== 'free') { AudioSys.gouranga(); addRankXp(20); } else addRankXp(5);
+    netSubmit();
+    if (!byHost && this.isHost()) this.send({ t: 'end' });
+  },
+  closeResults() {
+    this.results = null;
+    if (this.lobby && this.lobby.kind === 'priv') this.endGame('lobby');
+  },
+  endGame(why) {
+    if (!this.active) return;
+    this.active = false; this.results = null; this.ui(false);
+    lives = this.savedLives; targetScore = this.savedTarget; R = Math.random;
+    started = false; player.car = null; player.dead = false; player.busted = false;
+    if (why === 'lobby' && this.lobby) menuState = 'lobby';
+    else { this.leaveRoom(); menuState = 'main'; }
+    restartGame();                                     // връщаме единичната игра от записа
+  },
+  leaveGame() { this.send({ t: 'leave' }); this.lobby = null; this.players.clear(); this.endGame('quit'); },
+  ui(on) {
+    if (on && !this.emoteWrap) {
+      const w = document.createElement('div');
+      w.style.cssText = 'position:fixed;left:50%;bottom:8px;transform:translateX(-50%);z-index:30;display:flex;gap:6px';
+      for (const e of ['👋', '😂', '🔥', '💀', '🏁']) {
+        const b = document.createElement('div'); b.textContent = e;
+        b.style.cssText = 'width:38px;height:38px;border-radius:50%;background:rgba(10,10,18,.75);border:1px solid rgba(255,210,60,.5);display:grid;place-items:center;font-size:20px;user-select:none;-webkit-user-select:none';
+        const fire = (ev) => { ev.preventDefault(); this.send({ t: 'ev', kind: 'chat', text: e }); this.myBubble = e; this.myBubbleT = 3; };
+        b.addEventListener('touchstart', fire, { passive: false }); b.addEventListener('mousedown', fire);
+        w.appendChild(b);
+      }
+      const q = document.createElement('div'); q.textContent = '✕ Излез';
+      q.style.cssText = 'position:fixed;right:10px;top:8px;z-index:30;background:rgba(10,10,18,.8);color:#e08080;border:1px solid #e05a5a;border-radius:6px;padding:6px 10px;font:700 12px sans-serif;user-select:none;-webkit-user-select:none';
+      const quit = (ev) => { ev.preventDefault(); this.leaveGame(); };
+      q.addEventListener('touchstart', quit, { passive: false }); q.addEventListener('mousedown', quit);
+      document.body.append(w, q); this.emoteWrap = w; this.leaveBtn = q;
+    } else if (!on && this.emoteWrap) { this.emoteWrap.remove(); this.leaveBtn.remove(); this.emoteWrap = null; this.leaveBtn = null; }
+  },
+  draw() {
+    if (!this.active) return;
+    for (const [sid, p] of this.players) {
+      if (!p.seen) continue;
+      const s = worldToScreen(p.x, p.y);
+      if (s.x < -80 || s.y < -80 || s.x > VW + 80 || s.y > VH + 80) continue;
+      if (p.car) {
+        let fc = this.fakeCars.get(sid);
+        if (!fc || fc.kind !== p.car) { fc = makeCar(p.x, p.y, p.a, p.car); fc.parked = true; this.fakeCars.set(sid, fc); }
+        fc.x = p.x; fc.y = p.y; fc.angle = p.a; fc.speed = 0;
+        drawCar(fc);
+      } else if (!p.dead) {
+        ctx.save(); ctx.translate(s.x, s.y); ctx.scale(camZoom, camZoom); ctx.rotate(p.a);
+        ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(2, 3, 9, 7, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#3a6fb5'; ctx.beginPath(); ctx.ellipse(0, 0, 8, 6.5, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#e8c39e'; ctx.beginPath(); ctx.arc(2, 0, 3.6, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#222'; ctx.fillRect(5, -1.2, 8, 2.4);
+        ctx.restore();
+      } else continue;
+      ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      ctx.font = 'bold ' + Math.round(11 * camZoom + 2) + 'px sans-serif';
+      const ty = s.y - (p.car ? 26 : 16) * camZoom;
+      const tw = ctx.measureText(p.nick).width + 10;
+      ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(s.x - tw / 2, ty - 15, tw, 15);
+      ctx.fillStyle = '#ffd23c'; ctx.fillText(p.nick, s.x, ty - 2);
+      ctx.fillStyle = '#400'; ctx.fillRect(s.x - 16, ty + 1, 32, 3);
+      ctx.fillStyle = '#e33'; ctx.fillRect(s.x - 16, ty + 1, 32 * clamp(p.hp / 100, 0, 1), 3);
+      if (p.bubbleT > 0) { ctx.font = '22px sans-serif'; ctx.fillText(p.bubble, s.x, ty - 18); }
+      ctx.restore();
+    }
+    if (this.myBubbleT > 0) {
+      const s = worldToScreen(player.x, player.y);
+      ctx.save(); ctx.font = '22px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      ctx.fillText(this.myBubble, s.x, s.y - 22 * camZoom); ctx.restore();
+    }
+  },
+  drawHud() {
+    if (!this.active) return;
+    const mode = this.rules.mode;
+    ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    let y = 8;
+    ctx.font = 'bold 13px sans-serif';
+    const head = '🌐 ' + MP_MODES[mode] + (this.timeLeft ? '   ⏱ ' + Math.floor(this.timeLeft / 60) + ':' + String(Math.floor(this.timeLeft % 60)).padStart(2, '0') : '') + '   · ' + (this.players.size + 1) + ' в града';
+    const w = ctx.measureText(head).width + 16;
+    ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(VW / 2 - w / 2, y, w, 18);
+    ctx.fillStyle = '#fff'; ctx.fillText(head, VW / 2, y + 2); y += 22;
+    if (mode !== 'free') {
+      ctx.font = '12px sans-serif';
+      for (const r of this.standings().slice(0, 4)) {
+        ctx.fillStyle = r.me ? '#ffd23c' : '#ddd';
+        ctx.fillText(r.nick + (r.me ? ' (ти)' : '') + ' — ' + (mode === 'cash' ? fmtMoney(r.sc) : r.sc + ' 💀'), VW / 2, y); y += 15;
+      }
+    }
+    ctx.restore();
+    if (this.results) this.drawResults();
+  },
+  drawResults() {
+    const r = this.results; r.t += 1 / 60;
+    const a = clamp(r.t / 0.5, 0, 1);
+    ctx.fillStyle = 'rgba(5,5,12,' + (0.85 * a).toFixed(2) + ')'; ctx.fillRect(0, 0, VW, VH);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = 'bold 16px sans-serif'; ctx.fillStyle = '#fff'; ctx.fillText('КРАЙ НА МАЧА', VW / 2, VH * 0.16);
+    if (this.rules.mode !== 'free') {
+      ctx.font = 'bold ' + Math.min(44, VW * 0.09) + 'px sans-serif'; ctx.fillStyle = '#ffd23c';
+      ctx.fillText('🏆 ' + r.winner.nick, VW / 2, VH * 0.29);
+    }
+    ctx.font = '15px sans-serif';
+    let y = VH * 0.44;
+    r.rows.forEach((row, i) => {
+      ctx.fillStyle = row.me ? '#ffd23c' : '#ddd';
+      ctx.fillText((i + 1) + '. ' + row.nick + (row.me ? ' (ти)' : '') + (this.rules.mode === 'free' ? '' : '  —  ' + (this.rules.mode === 'cash' ? fmtMoney(row.sc) : row.sc + ' 💀')), VW / 2, y); y += 22;
+    });
+    ctx.fillStyle = '#8aa'; ctx.font = '13px sans-serif';
+    ctx.fillText(this.lobby && this.lobby.kind === 'priv' ? 'Докосни — обратно в лобито' : 'Докосни, за да продължиш', VW / 2, VH * 0.88);
+    ctx.textBaseline = 'top';
+  },
+  fetchStats() { fetch(API_BASE + '/api/online').then(r => r.json()).then(j => { this.stats = j; }).catch(() => { this.stats = null; }); },
+};
+function drawOnlineMenu() {
+  menuButtons = [];
+  if (Date.now() - MP.statsT > 4000) { MP.statsT = Date.now(); MP.fetchStats(); }
+  ctx.fillStyle = '#0a0a12'; ctx.fillRect(0, 0, VW, VH);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = 'bold 26px sans-serif'; ctx.fillStyle = '#ffd23c';
+  ctx.fillText('🌐 ИГРАЙ ОНЛАЙН', VW / 2, VH * 0.09);
+  ctx.font = 'bold 14px sans-serif';
+  const st = MP.stats;
+  ctx.fillStyle = st ? '#7ee08a' : '#888';
+  ctx.fillText(st ? '● Онлайн сега: ' + st.online + (st.online === 1 ? ' играч' : ' играчи') + (st.private ? '  ·  частни игри: ' + st.private : '') : '○ свързвам се...', VW / 2, VH * 0.09 + 28);
+  const w = Math.min(420, VW - 30), x = VW / 2 - w / 2;
+  const cardH = clamp(VH * 0.16, 54, 84);
+  let y = VH * 0.23;
+  const cities = [['sofia', 'София', 'Топло, златисто, у дома', '255,210,60'], ['ruse', 'Русе', 'Дунавът, влажен и зелен', '120,220,140']];
+  for (const [key, name, desc, glow] of cities) {
+    const n = st ? (st.rooms[key] || 0) : 0;
+    ctx.fillStyle = 'rgba(' + glow + ',0.10)'; ctx.fillRect(x, y, w, cardH);
+    ctx.strokeStyle = 'rgba(' + glow + ',0.6)'; ctx.lineWidth = 1; ctx.strokeRect(x, y, w, cardH);
+    ctx.textAlign = 'left'; ctx.fillStyle = '#fff'; ctx.font = 'bold 18px sans-serif';
+    ctx.fillText(name, x + 14, y + cardH * 0.36);
+    ctx.font = '12px sans-serif'; ctx.fillStyle = '#9aa';
+    ctx.fillText(desc, x + 14, y + cardH * 0.7);
+    ctx.textAlign = 'right'; ctx.font = 'bold 14px sans-serif'; ctx.fillStyle = n ? '#7ee08a' : '#777';
+    ctx.fillText('👥 ' + n, x + w - 96, y + cardH * 0.36);
+    ctx.font = 'bold 13px sans-serif';
+    menuBtn(MP.joining ? '...' : 'ВЛЕЗ ▶', x + w - 86, y + cardH / 2 - 17, 74, 34, 'join:' + key, 'primary');
+    y += cardH + 10;
+  }
+  y += 4;
+  const bh = clamp(VH * 0.09, 36, 44);
+  ctx.font = 'bold 14px sans-serif';
+  menuBtn('➕  СЪЗДАЙ ЧАСТНА ИГРА', x, y, w / 2 - 5, bh, 'create'); 
+  menuBtn('🔑  ВЛЕЗ С КОД', x + w / 2 + 5, y, w / 2 - 5, bh, 'code'); y += bh + 8;
+  if (MP.err) { ctx.textAlign = 'center'; ctx.fillStyle = '#e08080'; ctx.font = '13px sans-serif'; ctx.fillText(MP.err, VW / 2, y + 10); y += 22; }
+  ctx.font = 'bold 14px sans-serif';
+  menuBtn('← НАЗАД', x, Math.max(y, VH - bh - 12), w, bh, 'onlineBack');
+  ctx.textBaseline = 'top';
+}
+function drawLobbyMenu() {
+  menuButtons = [];
+  const L = MP.lobby;
+  ctx.fillStyle = '#0a0a12'; ctx.fillRect(0, 0, VW, VH);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  if (!L) { ctx.fillStyle = '#aaa'; ctx.font = '14px sans-serif'; ctx.fillText('Свързвам...', VW / 2, VH / 2); ctx.textBaseline = 'top'; return; }
+  const host = MP.isHost();
+  const landscape = VW > VH * 1.25;
+  const pad = 12, colW = landscape ? (VW - pad * 3) / 2 : VW - pad * 2;
+  const lx = pad, rx = landscape ? pad * 2 + colW : pad;
+  // Лява колона: код + играчи
+  let y = 10;
+  ctx.textAlign = 'left'; ctx.font = 'bold 12px sans-serif'; ctx.fillStyle = '#8aa';
+  ctx.fillText('ЧАСТНА ИГРА · КОД ЗА ПОКАНА', lx, y + 8); y += 22;
+  ctx.font = 'bold ' + Math.min(38, colW * 0.16) + 'px monospace'; ctx.fillStyle = '#ffd23c';
+  ctx.fillText(L.code, lx, y + 18);
+  ctx.font = 'bold 12px sans-serif';
+  menuBtn('📤 Сподели', lx + colW - 96, y + 3, 96, 30, 'share'); y += 44;
+  ctx.textAlign = 'left'; ctx.font = 'bold 12px sans-serif'; ctx.fillStyle = '#8aa';
+  ctx.fillText('ИГРАЧИ (' + L.players.length + '/12)', lx, y + 6); y += 20;
+  ctx.font = '14px sans-serif';
+  for (const p of L.players) {
+    const me = p.sid === MP.sid, isH = p.sid === L.host;
+    ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fillRect(lx, y, colW, 26);
+    ctx.textAlign = 'left'; ctx.fillStyle = me ? '#ffd23c' : '#ddd';
+    ctx.fillText((isH ? '👑 ' : '') + p.nick + (me ? ' (ти)' : ''), lx + 8, y + 13);
+    ctx.textAlign = 'right'; ctx.fillStyle = isH ? '#8aa' : p.ready ? '#7ee08a' : '#666';
+    ctx.fillText(isH ? 'домакин' : p.ready ? 'готов ✓' : 'чака...', lx + colW - 8, y + 13);
+    y += 29;
+  }
+  // Дясна колона: правила
+  let ry = landscape ? 10 : y + 10;
+  ctx.textAlign = 'left'; ctx.font = 'bold 12px sans-serif'; ctx.fillStyle = '#8aa';
+  ctx.fillText(host ? 'ПРАВИЛА — тапни, за да смениш' : 'ПРАВИЛА — избира домакинът', rx, ry + 8); ry += 22;
+  const rows = [['🗺 Карта', 'map'], ['🎯 Режим', 'mode'], ['⏱ Време', 'minutes'], ['🚔 Полиция', 'police'], ['🔫 Огън по приятели', 'ff'], ['🚗 Трафик', 'traffic'], ['🎒 Оръжия', 'weapons']];
+  const rh = clamp((VH - ry - 110) / rows.length - 4, 22, 32), rf = rh < 26 ? 12 : 13;
+  for (const [label, key] of rows) {
+    if (key === 'minutes' && L.settings.mode === 'free') continue;
+    ctx.fillStyle = host ? 'rgba(255,210,60,0.08)' : 'rgba(255,255,255,0.05)'; ctx.fillRect(rx, ry, colW, rh);
+    ctx.strokeStyle = host ? 'rgba(255,210,60,0.35)' : 'rgba(255,255,255,0.12)'; ctx.lineWidth = 1; ctx.strokeRect(rx, ry, colW, rh);
+    ctx.textAlign = 'left'; ctx.font = rf + 'px sans-serif'; ctx.fillStyle = '#ddd'; ctx.fillText(label, rx + 8, ry + rh / 2);
+    ctx.textAlign = 'right'; ctx.font = 'bold ' + rf + 'px sans-serif'; ctx.fillStyle = '#ffd23c';
+    ctx.fillText(MP_LABEL[key](L.settings[key]) + (host ? '  ›' : ''), rx + colW - 8, ry + rh / 2);
+    if (host) menuButtons.push({ x: rx, y: ry, w: colW, h: rh, act: 'set:' + key });
+    ry += rh + 4;
+  }
+  ctx.textAlign = 'left'; ctx.font = '11px sans-serif'; ctx.fillStyle = '#8aa';
+  ctx.fillText(MP_MODE_DESC[L.settings.mode], rx + 2, ry + 8); ry += 22;
+  // Долу: действия
+  const by = VH - 46, bw = (VW - pad * 3) / 2;
+  ctx.font = 'bold 14px sans-serif';
+  if (host) {
+    const others = L.players.filter(p => p.sid !== L.host);
+    const allReady = others.every(p => p.ready);
+    menuBtn(others.length && !allReady ? 'СТАРТ (чакам готови...)' : '▶  СТАРТ', pad, by, bw, 36, 'start', 'primary');
+  } else {
+    menuBtn(MP.myReady() ? '✓ ГОТОВ' : 'ГОТОВ?', pad, by, bw, 36, 'ready', MP.myReady() ? '' : 'primary');
+  }
+  menuBtn('НАПУСНИ', pad * 2 + bw, by, bw, 36, 'leave');
+  ctx.textBaseline = 'top';
+}
+function editCode() {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'position:fixed;inset:0;z-index:40;background:rgba(5,5,12,.9);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;font-family:sans-serif';
+  const lbl = document.createElement('div'); lbl.textContent = 'Код за покана (5 знака)'; lbl.style.cssText = 'color:#ffd23c;font-weight:700';
+  const inp = document.createElement('input'); inp.maxLength = 5; inp.autocapitalize = 'characters';
+  inp.style.cssText = 'font-size:26px;letter-spacing:8px;padding:10px 12px;border-radius:6px;border:1px solid #ffd23c;background:#111;color:#fff;width:200px;text-align:center;text-transform:uppercase;font-family:monospace';
+  const row = document.createElement('div'); row.style.cssText = 'display:flex;gap:10px';
+  const mk = (t, bg) => { const b = document.createElement('div'); b.textContent = t; b.style.cssText = 'padding:10px 18px;border-radius:6px;font-weight:700;background:' + bg + ';color:#111'; return b; };
+  const ok = mk('Влез', '#ffd23c'), no = mk('Отказ', '#888');
+  row.append(ok, no); wrap.append(lbl, inp, row); document.body.appendChild(wrap);
+  setTimeout(() => inp.focus(), 50);
+  no.onclick = () => wrap.remove();
+  ok.onclick = () => { const c = inp.value.trim().toUpperCase(); if (c.length === 5) { MP.joinCode(c); wrap.remove(); } };
+  inp.onkeydown = (e) => { if (e.key === 'Enter') ok.onclick(); };
+}
+function shareCode() {
+  const L = MP.lobby; if (!L) return;
+  const text = 'Ела да играем GangCity! Код за покана: ' + L.code + ' — https://alexanderslavchev.github.io/GangCity/';
+  if (navigator.share) navigator.share({ title: 'GangCity', text }).catch(() => {});
+  else if (navigator.clipboard) { navigator.clipboard.writeText(text).catch(() => {}); showMsg('Кодът е копиран.', 2); }
+}
+
 /* ---------------- Настройки ---------------- */
 const settings = { sfx: true, music: true, vibro: true, lowFx: false, bigCtrl: false, splitCar: true };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('gangcity_settings') || '{}')); } catch (e) {}
@@ -408,6 +802,7 @@ function drawMainMenu() {
   const sv = hasSave();
   if (sv) { menuBtn('▶  ПРОДЪЛЖИ', x, y, w, h, 'continue', 'primary'); y += h + 14; }
   menuBtn('✦  НОВА ИГРА', x, y, w, h, 'new', sv ? '' : 'primary'); y += h + 14;
+  menuBtn('🌐  ИГРАЙ ОНЛАЙН', x, y, w, h, 'online'); y += h + 14;
   menuBtn('🏆  КЛАСАЦИЯ', x, y, w, h, 'board'); y += h + 14;
   menuBtn('⚙  НАСТРОЙКИ', x, y, w, h, 'settings'); y += h + 14;
   if (scoreBest > 0) { ctx.font = '13px sans-serif'; ctx.fillStyle = '#7ee08a'; ctx.fillText('Рекорд: ' + fmtMoney(scoreBest), VW / 2, y + 10); }
@@ -471,6 +866,16 @@ function menuTapAct(hit) {
   else if (hit === 'board') { menuState = 'board'; net.board = null; net.err = null; }
   else if (hit === 'retry') { net.err = null; net.board = null; }
   else if (hit === 'nick') { editNick(); }
+  else if (hit === 'online') { menuState = 'online'; MP.err = null; MP.statsT = 0; }
+  else if (hit === 'onlineBack') { menuState = 'main'; }
+  else if (hit.startsWith('join:')) { if (!MP.joining) MP.joinPublic(hit.slice(5)); }
+  else if (hit === 'create') { if (!MP.joining) MP.createPrivate(); }
+  else if (hit === 'code') { editCode(); }
+  else if (hit === 'share') { shareCode(); }
+  else if (hit.startsWith('set:')) { MP.cycle(hit.slice(4)); }
+  else if (hit === 'ready') { MP.send({ t: 'ready', v: !MP.myReady() }); }
+  else if (hit === 'start') { MP.send({ t: 'start' }); }
+  else if (hit === 'leave') { MP.leaveRoom(); menuState = 'online'; }
   else if (hit === 'back') { menuState = 'main'; resetArmed = 0; }
   else if (hit.startsWith('toggle:')) { const k = hit.slice(7); settings[k] = !settings[k]; saveSettings(); applySettings(); }
   else if (hit === 'reset') {
@@ -498,6 +903,7 @@ function menuTap(x, y) {
 /* ---------------- Екран "Нов град" ---------------- */
 let unlockScreen = null;
 function openUnlockScreen(city, mode) {
+  if (MP.active) return;
   unlockScreen = { city, mode, t: 0, lastT: 0, btns: [], confetti: [] };
   AudioSys.gouranga();
 }
@@ -1716,6 +2122,7 @@ function addSkid(x1, y1, x2, y2) {
 
 // ---------------- Престъпления и издирване ----------------
 function addHeat(amount) {
+  if (MP.active && MP.rules && !MP.rules.police) return;   // правило "без полиция"
   player.heat = Math.min(player.heat + amount * (theme.heatMult || 1), 400);
   player.lastCrimeT = gameT;
   recalcWanted();
@@ -1960,6 +2367,7 @@ function damageCar(c, dmg, byPlayer, cause) {
   }
 }
 function explode(x, y, byPlayer) {
+  if (MP.active && byPlayer) MP.send({ t: 'ev', kind: 'boom', x: Math.round(x), y: Math.round(y) });
   FX.boom(x, y);
   AudioSys.boom();
   panicNear(x, y, 420);
@@ -1979,6 +2387,7 @@ function damagePlayer(dmg) {
   if (player.hp <= 0) {
     player.hp = 0; player.dead = true; player.deadT = 0;
     player.car = null;
+    if (MP.active) MP.onDeath();
     endFrenzy(false);
     if (mission.active) endMission(false);
   }
@@ -2464,7 +2873,7 @@ window.addEventListener('keydown', e => {
   if (!started) {
     if (menuState !== 'cities') {
       if (e.key === 'Enter' || e.key === ' ') menuPrimary();
-      else if (e.key === 'Escape') { menuState = 'main'; resetArmed = 0; }
+      else if (e.key === 'Escape') { if (menuState === 'lobby') { MP.leaveRoom(); menuState = 'online'; } else menuState = 'main'; resetArmed = 0; }
       return;
     }
     if (e.key === 'Escape') { menuState = 'main'; return; }
@@ -2472,6 +2881,7 @@ window.addEventListener('keydown', e => {
     startWithCity(!isNaN(n) && n >= 1 && n <= THEMES.length ? n - 1 : cityIdx);
     return;
   }
+  if (MP.results) { if (e.key === 'Enter' || e.key === ' ') MP.closeResults(); return; }
   if (unlockScreen) { if (e.key === 'Enter' || e.key === ' ') unlockTap(-1, -1); return; }
   if (gameOver) { restartGame(); return; }
   if (e.key.toLowerCase() === 'e' || e.key === 'Enter') actionPressed = true;
@@ -2520,6 +2930,7 @@ function touchStart(e) {
     menuTap(t0.clientX, t0.clientY);
     return;
   }
+  if (MP.results) { MP.closeResults(); return; }
   if (unlockScreen) { const t0 = e.changedTouches[0]; unlockTap(t0.clientX, t0.clientY); return; }
   if (gameOver) { restartGame(); return; }
   for (const t of e.changedTouches) {
@@ -2585,6 +2996,7 @@ canvas.addEventListener('touchend', touchEnd, { passive: false });
 canvas.addEventListener('touchcancel', touchEnd, { passive: false });
 canvas.addEventListener('mousedown', e => {
   if (!started) menuTap(e.clientX, e.clientY);
+  else if (MP.results) MP.closeResults();
   else if (unlockScreen) unlockTap(e.clientX, e.clientY);
   else if (gameOver) restartGame();
 });
@@ -2875,6 +3287,7 @@ function updatePlayer(dt, inp) {
     if (player.ammo[player.weapon] !== 0) {
       player.fireT = w.rate;
       fireWeapon(player, player.angle, player.weapon, false);
+      if (MP.active) MP.send({ t: 'ev', kind: 'shot', x: Math.round(player.x), y: Math.round(player.y), a: +player.angle.toFixed(2) });
       if (player.ammo[player.weapon] > 0) {
         player.ammo[player.weapon]--;
         if (player.ammo[player.weapon] === 0) { showMsg('Патроните свършиха', 1.5); cycleWeapon(); }
@@ -3339,6 +3752,16 @@ function updateProjectiles(dt) {
     let gone = b.life <= 0 || solid;
     if (b.type === 'rocket') FX.smoke(b.x, b.y);
     if (b.type === 'flame') FX.flameJet(b);
+    if (!gone && MP.active && !b.police) {
+      for (const [sid, rp] of MP.players) {
+        if (rp.dead || !rp.seen) continue;
+        const rr = rp.car ? 18 : 12;
+        if (dist2(rp.x, rp.y, b.x, b.y) < rr * rr) {
+          MP.send({ t: 'ev', kind: 'hit', to: sid, dmg: b.type === 'rocket' ? 60 : b.dmg, x: b.x, y: b.y });
+          FX.blood(b.x, b.y); gone = true; break;
+        }
+      }
+    }
     if (!gone) {
       for (const p of peds) {
         if (p.dead) continue;
@@ -3411,7 +3834,7 @@ function recycle(dt) {
   let liveCars = 0, livePeds = 0;
   for (const c of cars) if (!c.dead && c.kind !== 'police') liveCars++;
   for (const p of peds) if (!p.dead && !p.cop) livePeds++;
-  if (liveCars < (player.wanted >= 6 ? 10 : 36) && R() < dt * 3) {
+  if (liveCars < (player.wanted >= 6 ? 10 : 36) * (MP.active && MP.rules ? MP.rules.traffic : 1) && R() < dt * 3) {
     const s = randomRoadSpot();
     if (s) {
       const d = dist2(s.x, s.y, player.x, player.y);
@@ -5277,6 +5700,7 @@ function drawHUD() {
 
   // Тъч контроли
   if (IS_TOUCH && !gameOver) drawTouchControls();
+  MP.drawHud();
   if (unlockScreen) drawUnlockScreen();
 }
 function bigCenterText(txt, color) {
@@ -5339,6 +5763,8 @@ function drawStartScreen() {
   if (menuState === 'main') { drawMainMenu(); return; }
   if (menuState === 'settings') { drawSettingsMenu(); return; }
   if (menuState === 'board') { drawBoardMenu(); return; }
+  if (menuState === 'online') { drawOnlineMenu(); return; }
+  if (menuState === 'lobby') { drawLobbyMenu(); return; }
   menuButtons = [];
   ctx.fillStyle = '#0a0a12';
   ctx.fillRect(0, 0, VW, VH);
@@ -5478,8 +5904,9 @@ function frame(now) {
     updateChurch(dt);
     updateTaxi(dt);
     AdBridge.update();
+    MP.update(dt);
     autoT -= dt;
-    if (autoT <= 0) { autoT = 12; if (started && !gameOver && !player.dead) autosaveRun(); }
+    if (autoT <= 0) { autoT = 12; if (started && !gameOver && !player.dead && !MP.active) autosaveRun(); }
     {
       const z = gangAt(player.x);
       if (z !== gangZoneLast && gameT - (window._zoneMsgT || -99) > 6) {
@@ -5551,6 +5978,7 @@ function frame(now) {
   for (const c of cars) drawCar(c);
   for (const p of peds) if (!p.dead) drawPed(p);
   drawPlayer();
+  MP.draw();
   drawProjectiles();
   drawParticles();
   drawMissionMarkers();
