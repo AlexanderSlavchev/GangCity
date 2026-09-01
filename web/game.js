@@ -132,7 +132,7 @@ function blockKeyOf(tx, ty) { return Math.floor(tx / BLOCK) + ',' + Math.floor(t
 // Градове: София (по действителния център) + класическата тройка
 const THEMES = [
   {
-    name: tr('lSofia'),
+    name: 'София',
     cast: 'rgb(255,240,214)', glow: '255,210,60', nightBias: 0, rainBias: 1, payMult: 1, heatMult: 1,
     tagline: 'Домът. Тук започва всичко.', starCar: 'sport',
     sofia: true,
@@ -146,7 +146,7 @@ const THEMES = [
     streetsV: ['бул. К. Величков', 'бул. Опълченска', 'бул. Мария Луиза', 'бул. Витоша', 'ул. Г. С. Раковски', 'бул. Васил Левски', 'бул. Евлоги Георгиев', 'бул. Цариградско шосе']
   },
   {
-    name: tr('lRuse'),
+    name: 'Русе',
     cast: 'rgb(214,240,208)', glow: '120,220,140', nightBias: 0, rainBias: 1.6, payMult: 1.25, heatMult: 1.1,
     tagline: 'Дунавът е влажен, но плаща добре.', starCar: 'cabrio',
     ruse: true, freeform: true, lowRise: true,
