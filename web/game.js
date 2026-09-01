@@ -655,6 +655,7 @@ function editNick() {
       await netEnsure();
       const r = await api('/nick', { id: net.id, token: net.token, nick: inp.value });
       net.nick = r.nick; netSave(); net.board = null; wrap.remove();
+      if (r.bonus) { showMsg('🪙 +' + r.bonus + GCT(' злато'), 3); AudioSys.gouranga(); netMe(true); }
       if (MP.ws && MP.ws.readyState === 1) MP.send({ t: 'nick', nick: net.nick });
     } catch (e) { msg.textContent = e.message; }
   };
