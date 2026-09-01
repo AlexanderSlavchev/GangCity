@@ -316,6 +316,286 @@ async function loadBoard() {
   } catch (e) { net.err = 'Няма връзка със сървъра.'; }
   net.busy = false;
 }
+// ---- Социално: профил, злато, магазин, банда, приятели, конструктор ----
+async function netMe(force) {
+  if (!force && net.me && Date.now() - (net.meT || 0) < 15000) return net.me;
+  try { await netEnsure(); net.me = await api('/me', { id: net.id, token: net.token }); net.meT = Date.now(); } catch (e) {}
+  return net.me;
+}
+async function netGold(kind) {
+  try { await netEnsure(); const r = await api('/gold/event', { id: net.id, token: net.token, kind }); if (net.me) { if (r.gold > net.me.gold) showMsg('🪙 +' + (r.gold - net.me.gold) + ' злато', 2); net.me.gold = r.gold; } } catch (e) {}
+}
+async function netUgcPlay(code, win) { try { await netEnsure(); await api('/ugc/play', { id: net.id, token: net.token, code, win }); } catch (e) {} }
+const social = { tab: 'new', list: null, busy: false, err: null, shop: null, crew: null, crewTop: null, friends: null,
+  def: { type: 'wreck', goal: 3, timer: 120, kind: null, wanted: 2, stealth: false, txt: '' }, title: '', savedCode: null };
+const UGC_BASE = { deliver: 60, hit: 70, race: 40, wreck: 45, crush: 60, fares: 55, survive: 30, bomb: 90, chase: 100 };
+const UGC_LABEL = { deliver: 'Кражба на кола', hit: 'Удар', race: 'Гонка', wreck: 'Разбиване', crush: 'Преса', fares: 'Такси', survive: 'Оцеляване', bomb: 'Бомба', chase: 'Преследване' };
+const UGC_KINDS = [null, 'taxi', 'sport', 'police', 'toro', 'cavallo', 'volta', 'cabrio', 'bus'];
+function ugcReward(d) { return Math.min(6000, UGC_BASE[d.type] * d.goal * (d.stealth ? 1.3 : 1) * (d.kind ? 1.2 : 1) * 4) | 0; }
+async function socialCall(path, body, after) {
+  social.busy = true; social.err = null;
+  try { await netEnsure(); const r = await api(path, { id: net.id, token: net.token, ...(body || {}) }); social.busy = false; if (after) after(r); return r; }
+  catch (e) { social.err = e.message; social.busy = false; return null; }
+}
+// Универсално текстово поле върху играта (canvas-ът няма клавиатура)
+function askText(label, initial, cb, opts) {
+  opts = opts || {};
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'position:fixed;inset:0;z-index:40;background:rgba(5,5,12,.9);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;font-family:sans-serif;padding:16px';
+  const lbl = document.createElement('div'); lbl.textContent = label; lbl.style.cssText = 'color:#ffd23c;font-weight:700;text-align:center';
+  const inp = document.createElement(opts.multi ? 'textarea' : 'input'); inp.maxLength = opts.max || 40; inp.value = initial || '';
+  if (opts.upper) inp.autocapitalize = 'characters';
+  inp.style.cssText = 'font-size:17px;padding:10px 12px;border-radius:6px;border:1px solid #ffd23c;background:#111;color:#fff;width:min(86vw,340px);text-align:' + (opts.upper ? 'center;text-transform:uppercase;letter-spacing:4px;font-family:monospace' : 'left') + (opts.multi ? ';height:90px' : '');
+  const row = document.createElement('div'); row.style.cssText = 'display:flex;gap:10px';
+  const mk = (t, bg) => { const b = document.createElement('div'); b.textContent = t; b.style.cssText = 'padding:10px 18px;border-radius:6px;font-weight:700;background:' + bg + ';color:#111;touch-action:none'; return b; };
+  const ok = mk(opts.okLabel || 'Запази', '#ffd23c'), no = mk('Отказ', '#888');
+  const msg = document.createElement('div'); msg.style.cssText = 'color:#e08080;font-size:13px;min-height:16px';
+  row.append(ok, no); wrap.append(lbl, inp, row, msg); document.body.appendChild(wrap);
+  setTimeout(() => inp.focus(), 50);
+  const close = () => wrap.remove();
+  no.onpointerdown = close;
+  ok.onpointerdown = async () => { const err = await cb(inp.value.trim()); if (err) msg.textContent = err; else close(); };
+  if (!opts.multi) inp.onkeydown = (e) => { if (e.key === 'Enter') ok.onpointerdown(); };
+}
+function crewTag() { return net.me && net.me.crew ? '[' + net.me.crew.name.replace(/\s+/g, '').slice(0, 4).toUpperCase() + '] ' : ''; }
+function myDisplayNick() { return crewTag() + (net.me && net.me.badge ? net.me.badge : '') + (net.nick || 'Гангстер'); }
+
+/* ---- Екран: Общност ---- */
+function drawCommunityMenu() {
+  menuButtons = [];
+  ctx.fillStyle = '#0a0a12'; ctx.fillRect(0, 0, VW, VH);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = 'bold 26px sans-serif'; ctx.fillStyle = '#ffd23c'; ctx.fillText('👥 ОБЩНОСТ', VW / 2, VH * 0.12);
+  ctx.font = '13px sans-serif'; ctx.fillStyle = '#8aa';
+  ctx.fillText('Бандата те чака. Приятелите те викат. Мисиите ги пишат играчите.', VW / 2, VH * 0.12 + 26);
+  const w = Math.min(320, VW - 60), h = clamp(VH * 0.11, 40, 50), x = VW / 2 - w / 2;
+  let y = VH * 0.3;
+  ctx.font = 'bold 16px sans-serif';
+  menuBtn('🏴  БАНДА' + (net.me && net.me.crew ? ': ' + net.me.crew.name : ''), x, y, w, h, 'crew', net.me && net.me.crew ? 'primary' : ''); y += h + 12;
+  menuBtn('👥  ПРИЯТЕЛИ', x, y, w, h, 'friends'); y += h + 12;
+  menuBtn('🛠  КОНСТРУКТОР НА МИСИИ', x, y, w, h, 'creator'); y += h + 12;
+  menuBtn('← НАЗАД', x, Math.max(y, VH - h - 12), w, h, 'back');
+  ctx.textBaseline = 'top';
+}
+/* ---- Екран: Банда ---- */
+function drawCrewMenu() {
+  menuButtons = [];
+  ctx.fillStyle = '#0a0a12'; ctx.fillRect(0, 0, VW, VH);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const me = net.me, crew = me && me.crew;
+  const w = Math.min(420, VW - 30), x = VW / 2 - w / 2;
+  if (!crew) {
+    ctx.font = 'bold 24px sans-serif'; ctx.fillStyle = '#ffd23c'; ctx.fillText('🏴 БАНДИ', VW / 2, VH * 0.1);
+    ctx.font = '13px sans-serif'; ctx.fillStyle = '#8aa'; ctx.fillText('Създай своя или влез с код от приятел. Общата класация е по общи пари.', VW / 2, VH * 0.1 + 26);
+    let y = VH * 0.25;
+    ctx.font = 'bold 14px sans-serif';
+    menuBtn('➕  СЪЗДАЙ БАНДА', x, y, w / 2 - 5, 40, 'crewCreate', 'primary');
+    menuBtn('🔑  ВЛЕЗ С КОД', x + w / 2 + 5, y, w / 2 - 5, 40, 'crewJoin'); y += 52;
+    if (!social.crewTop && !social.busy) socialCall('/crew/top', null, r => { social.crewTop = r.top; }) ;
+    ctx.textAlign = 'left'; ctx.font = 'bold 12px sans-serif'; ctx.fillStyle = '#8aa'; ctx.fillText('ТОП БАНДИ', x, y + 6); y += 18;
+    ctx.font = '13px sans-serif';
+    for (const c of (social.crewTop || []).slice(0, 8)) {
+      ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fillRect(x, y, w, 24);
+      ctx.fillStyle = c.color; ctx.fillRect(x, y, 5, 24);
+      ctx.textAlign = 'left'; ctx.fillStyle = '#ddd'; ctx.fillText(c.name + '  · ' + c.members + ' души', x + 12, y + 12);
+      ctx.textAlign = 'right'; ctx.fillStyle = '#7ee08a'; ctx.fillText(fmtMoney(c.total), x + w - 8, y + 12);
+      y += 27;
+    }
+  } else {
+    if (!social.crew || social.crew.id !== crew.id) { if (!social.busy) socialCall('/crew/' + crew.id, null, r => { social.crew = r; }); }
+    ctx.fillStyle = crew.color; ctx.fillRect(0, 0, VW, 6);
+    ctx.font = 'bold 26px sans-serif'; ctx.fillStyle = '#ffd23c'; ctx.fillText('🏴 ' + crew.name, VW / 2, VH * 0.1);
+    ctx.font = '13px sans-serif'; ctx.fillStyle = '#8aa';
+    ctx.fillText('Код за покана: ' + crew.id + (social.crew ? '  ·  общо ' + fmtMoney(social.crew.total) : ''), VW / 2, VH * 0.1 + 26);
+    let y = VH * 0.22;
+    ctx.font = 'bold 13px sans-serif';
+    menuBtn('📤 Сподели кода', x, y, w / 2 - 5, 32, 'crewShare');
+    menuBtn('🚪 Напусни', x + w / 2 + 5, y, w / 2 - 5, 32, 'crewLeave', 'danger'); y += 44;
+    const rowH = clamp((VH - y - 60) / 10, 20, 27);
+    ctx.font = (rowH < 24 ? 12 : 13) + 'px sans-serif';
+    for (const m of (social.crew ? social.crew.members : []).slice(0, 12)) {
+      ctx.fillStyle = m.id === net.id ? 'rgba(255,210,60,0.15)' : 'rgba(255,255,255,0.05)'; ctx.fillRect(x, y, w, rowH - 2);
+      ctx.textAlign = 'left'; ctx.fillStyle = m.online ? '#7ee08a' : '#666'; ctx.fillText('●', x + 8, y + rowH / 2 - 1);
+      ctx.fillStyle = '#ddd'; ctx.fillText((m.id === social.crew.leader ? '👑 ' : '') + (m.badge || '') + m.nick, x + 24, y + rowH / 2 - 1);
+      ctx.textAlign = 'right'; ctx.fillStyle = '#9fc4d8'; ctx.fillText(fmtMoney(m.best), x + w - 8, y + rowH / 2 - 1);
+      y += rowH;
+    }
+  }
+  if (social.err) { ctx.textAlign = 'center'; ctx.fillStyle = '#e08080'; ctx.font = '13px sans-serif'; ctx.fillText(social.err, VW / 2, VH - 60); }
+  ctx.font = 'bold 14px sans-serif';
+  menuBtn('← НАЗАД', x, VH - 46, w, 36, 'community');
+  ctx.textBaseline = 'top';
+}
+/* ---- Екран: Приятели ---- */
+function drawFriendsMenu() {
+  menuButtons = [];
+  ctx.fillStyle = '#0a0a12'; ctx.fillRect(0, 0, VW, VH);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const w = Math.min(420, VW - 30), x = VW / 2 - w / 2;
+  ctx.font = 'bold 24px sans-serif'; ctx.fillStyle = '#ffd23c'; ctx.fillText('👥 ПРИЯТЕЛИ', VW / 2, VH * 0.09);
+  ctx.font = '13px sans-serif'; ctx.fillStyle = '#8aa';
+  ctx.fillText('Твоят код: ' + (net.me ? net.me.fcode : '...') + '  — дай го на приятел, за да те добави', VW / 2, VH * 0.09 + 24);
+  if (!social.friends && !social.busy) socialCall('/friends/list', null, r => { social.friends = r.friends; });
+  if (Date.now() - (social.friendsT || 0) > 6000) { social.friendsT = Date.now(); socialCall('/friends/list', null, r => { social.friends = r.friends; }); }
+  let y = VH * 0.2;
+  ctx.font = 'bold 13px sans-serif';
+  menuBtn('📤 Сподели кода', x, y, w / 2 - 5, 32, 'fcodeShare');
+  menuBtn('➕ Добави по код', x + w / 2 + 5, y, w / 2 - 5, 32, 'friendAdd', 'primary'); y += 44;
+  const rowH = clamp((VH - y - 60) / 8, 26, 34);
+  ctx.font = (rowH < 30 ? 12 : 13) + 'px sans-serif';
+  const list = social.friends || [];
+  if (!list.length) { ctx.textAlign = 'center'; ctx.fillStyle = '#666'; ctx.fillText('Още нямаш приятели тук. Размени си кодовете.', VW / 2, y + 20); }
+  for (const f of list.slice(0, 10)) {
+    ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fillRect(x, y, w, rowH - 3);
+    ctx.textAlign = 'left'; ctx.fillStyle = f.online ? '#7ee08a' : '#666'; ctx.fillText('●', x + 8, y + rowH / 2 - 1);
+    ctx.fillStyle = '#ddd'; ctx.fillText((f.badge || '') + f.nick, x + 24, y + rowH / 2 - 1);
+    let where = f.online ? (f.room ? (f.room.kind === 'pub' ? 'играе в ' + (f.room.code === 'ruse' ? 'Русе' : 'София') : 'в частна игра') : 'в менюто') : 'офлайн';
+    ctx.fillStyle = f.online ? '#9fc4d8' : '#555'; ctx.font = '11px sans-serif'; ctx.fillText(where, x + 24 + ctx.measureText((f.badge || '') + f.nick).width + 40, y + rowH / 2 - 1);
+    ctx.font = (rowH < 30 ? 12 : 13) + 'px sans-serif';
+    if (f.online && f.room) { ctx.font = 'bold 12px sans-serif'; menuBtn('▶ Отиди', x + w - 84, y + 2, 78, rowH - 7, 'goto:' + f.room.kind + ':' + f.room.code); ctx.font = (rowH < 30 ? 12 : 13) + 'px sans-serif'; }
+    y += rowH;
+  }
+  if (social.err) { ctx.textAlign = 'center'; ctx.fillStyle = '#e08080'; ctx.font = '13px sans-serif'; ctx.fillText(social.err, VW / 2, VH - 60); }
+  ctx.font = 'bold 14px sans-serif';
+  menuBtn('← НАЗАД', x, VH - 46, w, 36, 'community');
+  ctx.textBaseline = 'top';
+}
+/* ---- Екран: Конструктор на мисии ---- */
+function drawCreatorMenu() {
+  menuButtons = [];
+  ctx.fillStyle = '#0a0a12'; ctx.fillRect(0, 0, VW, VH);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const w = Math.min(460, VW - 24), x = VW / 2 - w / 2;
+  ctx.font = 'bold 22px sans-serif'; ctx.fillStyle = '#ffd23c'; ctx.fillText('🛠 КОНСТРУКТОР НА МИСИИ', VW / 2, VH * 0.07);
+  let y = VH * 0.07 + 24;
+  ctx.font = 'bold 12px sans-serif';
+  const tabs = [['new', 'НОВА'], ['mine', 'МОИТЕ'], ['top', 'ПОПУЛЯРНИ']];
+  tabs.forEach(([id, label], i) => menuBtn(label, x + i * (w / 3), y, w / 3 - 4, 28, 'tab:' + id, social.tab === id ? 'primary' : ''));
+  y += 38;
+  const d = social.def;
+  if (social.tab === 'new') {
+    const rows = [['Тип', 'type', UGC_LABEL[d.type]], ['Цел', 'goal', String(d.goal)], ['Време', 'timer', d.timer + ' сек']];
+    if (['deliver', 'chase', 'wreck'].includes(d.type)) rows.push(['Модел кола', 'kind', d.kind ? (CAR_KINDS[d.kind] ? CAR_KINDS[d.kind].name : d.kind) : 'Който и да е']);
+    if (d.type === 'survive') rows.push(['Звезди', 'wanted', '★'.repeat(d.wanted)]);
+    if (d.type === 'race') rows.push(['Тихо (без звезди)', 'stealth', d.stealth ? 'Да' : 'Не']);
+    const rh = clamp((VH - y - 130) / (rows.length + 2), 22, 30);
+    ctx.font = (rh < 26 ? 12 : 13) + 'px sans-serif';
+    for (const [label, key, val] of rows) {
+      ctx.fillStyle = 'rgba(255,210,60,0.08)'; ctx.fillRect(x, y, w, rh);
+      ctx.strokeStyle = 'rgba(255,210,60,0.35)'; ctx.lineWidth = 1; ctx.strokeRect(x, y, w, rh);
+      ctx.textAlign = 'left'; ctx.fillStyle = '#ddd'; ctx.fillText(label, x + 8, y + rh / 2);
+      ctx.textAlign = 'right'; ctx.fillStyle = '#ffd23c'; ctx.fillText(val + '  ›', x + w - 8, y + rh / 2);
+      menuButtons.push({ x, y, w, h: rh, act: 'ugc:' + key });
+      y += rh + 4;
+    }
+    ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fillRect(x, y, w, rh);
+    ctx.textAlign = 'left'; ctx.fillStyle = social.title ? '#fff' : '#777'; ctx.fillText('📝 ' + (social.title || 'Заглавие...') + (d.txt ? ' — ' + d.txt.slice(0, 40) : ''), x + 8, y + rh / 2);
+    menuButtons.push({ x, y, w, h: rh, act: 'ugc:text' });
+    y += rh + 8;
+    ctx.textAlign = 'center'; ctx.fillStyle = '#7ee08a'; ctx.font = 'bold 13px sans-serif';
+    ctx.fillText('Награда за играча: ' + fmtMoney(ugcReward(d)) + '  ·  ти печелиш 🪙 1 злато на всяко успешно изиграване', VW / 2, y + 8); y += 26;
+    if (social.savedCode) { ctx.fillStyle = '#ffd23c'; ctx.font = 'bold 15px sans-serif'; ctx.fillText('✓ Запазена! Код: ' + social.savedCode, VW / 2, y + 8); y += 26; }
+    ctx.font = 'bold 14px sans-serif';
+    menuBtn(social.busy ? '...' : '💾 ЗАПАЗИ И СПОДЕЛИ', x, y, w / 2 - 5, 36, 'ugcSave', 'primary');
+    menuBtn('▶ ПРОБВАЙ Я', x + w / 2 + 5, y, w / 2 - 5, 36, 'ugcTest');
+  } else {
+    const key = social.tab === 'mine' ? 'mine' : 'top';
+    if (social.listKey !== key) { social.listKey = key; social.list = null; }
+    if (!social.list && !social.busy) { if (key === 'mine') socialCall('/ugc/mine', null, r => { social.list = r.mine; }); else { social.busy = true; fetch(API_BASE + '/api/ugc/top?limit=12').then(r => r.json()).then(r => { social.list = r.top; social.busy = false; }).catch(() => { social.busy = false; social.err = 'Няма връзка.'; }); } }
+    const rh = clamp((VH - y - 60) / 8, 26, 36);
+    ctx.font = (rh < 30 ? 12 : 13) + 'px sans-serif';
+    const list = social.list || [];
+    if (!list.length && !social.busy) { ctx.textAlign = 'center'; ctx.fillStyle = '#666'; ctx.fillText(key === 'mine' ? 'Още нямаш мисии. Направи първата от „НОВА".' : 'Още няма популярни мисии — бъди първият автор!', VW / 2, y + 20); }
+    for (const u of list.slice(0, 8)) {
+      ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fillRect(x, y, w, rh - 3);
+      ctx.textAlign = 'left'; ctx.fillStyle = '#fff'; ctx.fillText(u.title, x + 8, y + rh / 2 - 4);
+      ctx.fillStyle = '#8aa'; ctx.font = '11px sans-serif';
+      ctx.fillText((u.author_nick ? 'от ' + u.author_nick + ' · ' : '') + UGC_LABEL[u.def.type] + ' · ▶ ' + u.plays + ' · 👍 ' + u.likes + ' · ' + fmtMoney(u.def.reward), x + 8, y + rh / 2 + 9);
+      ctx.font = 'bold 12px sans-serif';
+      menuBtn('▶', x + w - 88, y + 3, 40, rh - 9, 'ugcPlay:' + u.code, 'primary');
+      menuBtn('👍', x + w - 44, y + 3, 40, rh - 9, 'ugcLike:' + u.code);
+      ctx.font = (rh < 30 ? 12 : 13) + 'px sans-serif';
+      y += rh;
+    }
+  }
+  if (social.err) { ctx.textAlign = 'center'; ctx.fillStyle = '#e08080'; ctx.font = '12px sans-serif'; ctx.fillText(social.err, VW / 2, VH - 58); }
+  ctx.font = 'bold 14px sans-serif';
+  menuBtn('← НАЗАД', x, VH - 46, w, 36, 'community');
+  ctx.textBaseline = 'top';
+}
+/* ---- Екран: Магазин ---- */
+function drawShopMenu() {
+  menuButtons = [];
+  ctx.fillStyle = '#0a0a12'; ctx.fillRect(0, 0, VW, VH);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const w = Math.min(460, VW - 24), x = VW / 2 - w / 2;
+  ctx.font = 'bold 24px sans-serif'; ctx.fillStyle = '#ffd23c'; ctx.fillText('🎨 МАГАЗИН', VW / 2, VH * 0.08);
+  ctx.font = 'bold 15px sans-serif'; ctx.fillStyle = '#ffd23c';
+  ctx.fillText('🪙 ' + (net.me ? net.me.gold : '...') + ' злато', VW / 2, VH * 0.08 + 28);
+  ctx.font = '11px sans-serif'; ctx.fillStyle = '#8aa';
+  ctx.fillText('Злато печелиш от дневни задачи, рангове, мисии и онлайн победи (до 60 на ден). Скоро: премиум градове и без реклами.', VW / 2, VH * 0.08 + 46);
+  if (!social.shop) { fetch(API_BASE + '/api/shop').then(r => r.json()).then(r => { social.shop = r.items; }).catch(() => {}); }
+  const items = Object.entries(social.shop || {});
+  const cols = VW > VH * 1.25 ? 2 : 1;
+  const colW = cols === 2 ? (w - 10) / 2 : w;
+  const rows = Math.ceil(items.length / cols);
+  const rh = clamp((VH - VH * 0.08 - 70 - 56) / rows - 6, 30, 44);
+  let y0 = VH * 0.08 + 66;
+  const owned = net.me ? net.me.items : [];
+  ctx.font = (rh < 36 ? 12 : 13) + 'px sans-serif';
+  items.forEach(([id, it], i) => {
+    const cx = x + (i % cols) * (colW + 10), cy = y0 + Math.floor(i / cols) * (rh + 6);
+    const has = owned.includes(id);
+    const equipped = net.me && ((it.kind === 'badge' && net.me.badge === it.value) || (it.kind === 'paint' && net.me.paint === it.value));
+    ctx.fillStyle = equipped ? 'rgba(126,224,138,0.12)' : 'rgba(255,255,255,0.05)'; ctx.fillRect(cx, cy, colW, rh);
+    if (it.kind === 'paint') { ctx.fillStyle = it.value; ctx.fillRect(cx + 8, cy + rh / 2 - 9, 18, 18); }
+    else { ctx.textAlign = 'left'; ctx.font = '18px sans-serif'; ctx.fillStyle = '#fff'; ctx.fillText(it.value, cx + 8, cy + rh / 2); ctx.font = (rh < 36 ? 12 : 13) + 'px sans-serif'; }
+    ctx.textAlign = 'left'; ctx.fillStyle = '#ddd'; ctx.fillText(it.name, cx + 34, cy + rh / 2);
+    ctx.font = 'bold 12px sans-serif';
+    if (equipped) menuBtn('✓ Носиш', cx + colW - 90, cy + 4, 84, rh - 8, 'unequip:' + it.kind);
+    else if (has) menuBtn('Сложи', cx + colW - 90, cy + 4, 84, rh - 8, 'equip:' + id, 'primary');
+    else menuBtn('🪙 ' + it.price, cx + colW - 90, cy + 4, 84, rh - 8, 'buy:' + id, net.me && net.me.gold >= it.price ? 'primary' : '');
+    ctx.font = (rh < 36 ? 12 : 13) + 'px sans-serif';
+  });
+  if (social.err) { ctx.textAlign = 'center'; ctx.fillStyle = '#e08080'; ctx.font = '12px sans-serif'; ctx.fillText(social.err, VW / 2, VH - 58); }
+  ctx.font = 'bold 14px sans-serif';
+  menuBtn('← НАЗАД', x, VH - 46, w, 36, 'back');
+  ctx.textBaseline = 'top';
+}
+function cycleUgc(key) {
+  const d = social.def;
+  if (key === 'type') { const t = Object.keys(UGC_LABEL); d.type = t[(t.indexOf(d.type) + 1) % t.length]; if (['bomb', 'chase', 'deliver'].includes(d.type)) d.goal = 1; }
+  else if (key === 'goal') d.goal = d.goal >= 10 ? 1 : d.goal + 1;
+  else if (key === 'timer') { const t = [60, 90, 120, 180]; d.timer = t[(t.indexOf(d.timer) + 1) % t.length]; }
+  else if (key === 'kind') d.kind = UGC_KINDS[(UGC_KINDS.indexOf(d.kind) + 1) % UGC_KINDS.length];
+  else if (key === 'wanted') d.wanted = d.wanted >= 4 ? 2 : d.wanted + 1;
+  else if (key === 'stealth') d.stealth = !d.stealth;
+  social.savedCode = null;
+}
+let pendingUgc = null;
+function playUgc(u) {
+  pendingUgc = u;
+  if (started) { if (MP.active) MP.leaveGame(); startCustomMission(u); pendingUgc = null; return; }
+  if (!runLoaded) { runLoaded = true; applyAutoRun(); }
+  menuState = 'cities';
+  showMsg('Избери град за мисията „' + u.title + '"', 3);
+}
+function startCustomMission(u) {
+  const d = u.def;
+  mission.type = d.type; mission.text = d.txt || UGC_LABEL[d.type];
+  mission.reward = d.reward; mission.timer = d.timer;
+  mission.count = 0; mission.goal = d.goal; mission.wrecks = 0; mission.wreckGoal = d.goal;
+  mission.wreckKind = d.type === 'wreck' ? d.kind : null;
+  mission.stealth = !!d.stealth; mission.needWanted = d.wanted || 2; mission.surv = 0;
+  mission.checkpoints = []; mission.target = null; mission.drop = null; mission.gear = null; mission.tableIdx = null;
+  mission.gangHint = undefined; mission.gang = -1;
+  if (!setupMission({ type: d.type, goal: d.goal, kind: d.kind, stealth: d.stealth, wanted: d.wanted })) { showMsg('Мисията не може да се подготви тук — пробвай в друг град.', 3); return; }
+  mission.active = true; mission.startedAt = gameT; mission.ugc = u.code || null;
+  mission.text = '★ ' + u.title + (u.author ? ' (от ' + u.author + ')' : '') + ' · ' + mission.text;
+  showMsg('☎ ' + mission.text, 5);
+  AudioSys.pickup();
+}
+
 // Смяна на прякор — през HTML поле, защото на canvas няма клавиатура
 function editNick() {
   const wrap = document.createElement('div');
@@ -359,7 +639,7 @@ function drawBoardMenu() {
       ctx.fillRect(x, y, w, rowH - 2);
       ctx.textAlign = 'left'; ctx.fillStyle = me ? '#ffd23c' : (i < 3 ? '#fff' : '#ccc');
       ctx.font = (i < 3 || me ? 'bold ' : '') + fs2 + 'px sans-serif';
-      ctx.fillText((i + 1) + '. ' + p.nick + (p.rank ? '  · ' + p.rank : ''), x + 10, y + rowH / 2 - 1);
+      ctx.fillText((i + 1) + '. ' + (p.badge || '') + p.nick + (p.rank ? '  · ' + p.rank : ''), x + 10, y + rowH / 2 - 1);
       ctx.textAlign = 'right';
       ctx.fillText(fmtMoney(p.best) + '  · ' + p.missions + ' мис.', x + w - 10, y + rowH / 2 - 1);
       y += rowH;
@@ -409,10 +689,10 @@ const MP = {
     this.ws.onerror = () => { this.err = 'Няма връзка със сървъра.'; this.joining = false; };
   },
   send(o) { if (this.ws && this.ws.readyState === 1) this.ws.send(JSON.stringify(o)); },
-  nick() { return net.nick || 'Гангстер'; },
-  joinPublic(room) { this.joining = true; this.err = null; this.connect(() => this.send({ t: 'join', room, nick: this.nick() })); },
-  createPrivate() { this.joining = true; this.err = null; this.connect(() => this.send({ t: 'create', nick: this.nick() })); },
-  joinCode(code) { this.joining = true; this.err = null; this.connect(() => this.send({ t: 'joinCode', code, nick: this.nick() })); },
+  nick() { return myDisplayNick(); },
+  joinPublic(room) { this.joining = true; this.err = null; this.connect(() => this.send({ t: 'join', room, nick: this.nick(), pid: net.id })); },
+  createPrivate() { this.joining = true; this.err = null; this.connect(() => this.send({ t: 'create', nick: this.nick(), pid: net.id })); },
+  joinCode(code) { this.joining = true; this.err = null; this.connect(() => this.send({ t: 'joinCode', code, nick: this.nick(), pid: net.id })); },
   leaveRoom() { this.send({ t: 'leave' }); this.lobby = null; this.players.clear(); this.fakeCars.clear(); this.joining = false; },
   isHost() { return !!(this.lobby && this.lobby.host === this.sid); },
   myReady() { const me = this.lobby && this.lobby.players.find(p => p.sid === this.sid); return !!(me && me.ready); },
@@ -446,7 +726,7 @@ const MP = {
       case 'state': {
         const p = this.players.get(m.from);
         if (!p) break;
-        p.tx = m.x; p.ty = m.y; p.ta = m.a; p.car = m.car; p.hp = m.hp; p.w = m.w; p.sc = m.sc; p.dead = m.dead; p.lastT = gameT;
+        p.tx = m.x; p.ty = m.y; p.ta = m.a; p.car = m.car; p.pt = m.pt || ''; p.hp = m.hp; p.w = m.w; p.sc = m.sc; p.dead = m.dead; p.lastT = gameT;
         if (!p.seen) { p.seen = true; p.x = m.x; p.y = m.y; p.a = m.a; }
         break;
       }
@@ -507,7 +787,7 @@ const MP = {
     if (now - this.lastSend > 50) {
       this.lastSend = now;
       this.send({ t: 'state', x: Math.round(player.x), y: Math.round(player.y), a: +player.angle.toFixed(2),
-        car: player.car ? player.car.kind : null, hp: Math.round(player.hp), w: player.weapon, sc: this.myScore(), dead: player.dead });
+        car: player.car ? player.car.kind : null, pt: player.car ? player.car.color : '', hp: Math.round(player.hp), w: player.weapon, sc: this.myScore(), dead: player.dead });
     }
     const k = Math.min(1, dt * 12);
     for (const p of this.players.values()) {
@@ -537,7 +817,7 @@ const MP = {
     if (this.results) return;
     const rows = this.standings();
     this.results = { rows, t: 0, winner: rows[0] };
-    if (rows[0].me && this.rules.mode !== 'free') { AudioSys.gouranga(); addRankXp(20); } else addRankXp(5);
+    if (rows[0].me && this.rules.mode !== 'free') { AudioSys.gouranga(); addRankXp(20); netGold('match'); } else addRankXp(5);
     netSubmit();
     if (!byHost && this.isHost()) this.send({ t: 'end' });
   },
@@ -609,7 +889,7 @@ const MP = {
       if (s.x < -80 || s.y < -80 || s.x > VW + 80 || s.y > VH + 80) continue;
       if (p.car) {
         let fc = this.fakeCars.get(sid);
-        if (!fc || fc.kind !== p.car) { fc = makeCar(p.x, p.y, p.a, p.car); fc.parked = true; this.fakeCars.set(sid, fc); }
+        if (!fc || fc.kind !== p.car || (p.pt && fc.color !== p.pt)) { fc = makeCar(p.x, p.y, p.a, p.car); fc.parked = true; if (p.pt) fc.color = p.pt; this.fakeCars.set(sid, fc); }
         fc.x = p.x; fc.y = p.y; fc.angle = p.a; fc.speed = 0;
         drawCar(fc);
       } else if (!p.dead) {
@@ -865,14 +1145,15 @@ function drawMainMenu() {
   ctx.fillText('GANG CITY', VW / 2, VH * 0.2);
   ctx.font = '14px sans-serif'; ctx.fillStyle = '#8aa';
   ctx.fillText('⭐ ' + rankOf(meta.rankXp).name + '  ·  🚗 ' + meta.collection.length + '/' + Object.keys(CAR_KINDS).length +
-    '  ·  🏙 ' + THEMES.filter((t, i) => cityUnlocked(i)).length + '/' + THEMES.length + ' града', VW / 2, VH * 0.2 + 46);
+    '  ·  🏙 ' + THEMES.filter((t, i) => cityUnlocked(i)).length + '/' + THEMES.length + (net.me ? '  ·  🪙 ' + net.me.gold : ''), VW / 2, VH * 0.2 + 46);
   ctx.font = 'bold 12px sans-serif';
   menuBtn('✎ ' + (net.nick || 'Избери прякор'), VW / 2 - 80, VH * 0.2 + 62, 160, 26, 'nick');
   // Адаптивно: в пейзаж бутоните са в две колони, така че всичко се побира на екрана
   const sv = hasSave();
   const items = [];
   if (sv) items.push(['▶  ПРОДЪЛЖИ', 'continue', 'primary']);
-  items.push(['✦  НОВА ИГРА', 'new', sv ? '' : 'primary'], ['🌐  ИГРАЙ ОНЛАЙН', 'online', ''], ['🏆  КЛАСАЦИЯ', 'board', ''], ['⚙  НАСТРОЙКИ', 'settings', '']);
+  items.push(['✦  НОВА ИГРА', 'new', sv ? '' : 'primary'], ['🌐  ИГРАЙ ОНЛАЙН', 'online', ''], ['👥  ОБЩНОСТ', 'community', ''], ['🎨  МАГАЗИН', 'shop', ''], ['🏆  КЛАСАЦИЯ', 'board', ''], ['⚙  НАСТРОЙКИ', 'settings', '']);
+  if (!net.me) netMe();
   const cols = VW > VH * 1.25 ? 2 : 1;
   const perCol = Math.ceil(items.length / cols);
   const top = VH * 0.2 + 100, bottom = VH - (scoreBest > 0 ? 36 : 14), gap = 10;
@@ -955,6 +1236,28 @@ function menuTapAct(hit) {
   else if (hit === 'ready') { MP.send({ t: 'ready', v: !MP.myReady() }); }
   else if (hit === 'start') { MP.send({ t: 'start' }); }
   else if (hit === 'leave') { MP.leaveRoom(); menuState = 'online'; }
+  else if (hit === 'community') { menuState = 'community'; social.err = null; netMe(true); }
+  else if (hit === 'shop') { menuState = 'shop'; social.err = null; netMe(true); }
+  else if (hit === 'crew') { menuState = 'crew'; social.err = null; social.crew = null; social.crewTop = null; }
+  else if (hit === 'friends') { menuState = 'friends'; social.err = null; social.friends = null; }
+  else if (hit === 'creator') { menuState = 'creator'; social.err = null; social.list = null; social.listKey = null; }
+  else if (hit === 'crewCreate') { askText('Име на бандата (2–18 знака)', '', async (v) => { const r = await socialCall('/crew/create', { name: v, color: ['#3a6fb5', '#b53a3a', '#3a9b5a', '#a35ab5', '#e8a020'][Math.floor(R() * 5)] }); if (!r) return social.err; await netMe(true); return null; }, { max: 18 }); }
+  else if (hit === 'crewJoin') { askText('Код на бандата (5 знака)', '', async (v) => { const r = await socialCall('/crew/join', { code: v }); if (!r) return social.err; await netMe(true); social.crew = null; return null; }, { max: 5, upper: true, okLabel: 'Влез' }); }
+  else if (hit === 'crewLeave') { socialCall('/crew/leave', null, async () => { await netMe(true); social.crew = null; }); }
+  else if (hit === 'crewShare') { const c = net.me && net.me.crew; if (c) { const text = 'Влез в бандата ми в GangCity! Код: ' + c.id + ' — https://alexanderslavchev.github.io/GangCity/'; if (navigator.share) navigator.share({ title: 'GangCity', text }).catch(() => {}); else if (navigator.clipboard) navigator.clipboard.writeText(text).catch(() => {}); } }
+  else if (hit === 'fcodeShare') { if (net.me) { const text = 'Добави ме в GangCity! Моят код: ' + net.me.fcode + ' — https://alexanderslavchev.github.io/GangCity/'; if (navigator.share) navigator.share({ title: 'GangCity', text }).catch(() => {}); else if (navigator.clipboard) navigator.clipboard.writeText(text).catch(() => {}); } }
+  else if (hit === 'friendAdd') { askText('Код на приятеля (6 знака)', '', async (v) => { const r = await socialCall('/friends/add', { code: v }); if (!r) return social.err; social.friends = null; return null; }, { max: 6, upper: true, okLabel: 'Добави' }); }
+  else if (hit.startsWith('goto:')) { const [, kind, code] = hit.split(':'); if (kind === 'pub') MP.joinPublic(code); else MP.joinCode(code); }
+  else if (hit.startsWith('tab:')) { social.tab = hit.slice(4); social.err = null; }
+  else if (hit === 'ugc:text') { askText('Заглавие на мисията', social.title, async (v) => { if (v.length < 2) return 'Поне 2 знака.'; social.title = v; askText('Текст на шефа (незадължителен)', social.def.txt, async (t) => { social.def.txt = t; return null; }, { max: 140, multi: true }); return null; }, { max: 40 }); }
+  else if (hit.startsWith('ugc:')) { cycleUgc(hit.slice(4)); }
+  else if (hit === 'ugcSave') { if (!social.title) { social.err = 'Дай ѝ заглавие първо.'; } else socialCall('/ugc/create', { title: social.title, def: social.def }, r => { social.savedCode = r.code; social.list = null; const text = 'Пробвай мисията ми „' + social.title + '" в GangCity! Код: ' + r.code; if (navigator.share) navigator.share({ title: 'GangCity', text }).catch(() => {}); }); }
+  else if (hit === 'ugcTest') { playUgc({ title: social.title || 'Проба', author: net.nick, code: null, def: { ...social.def, reward: ugcReward(social.def) } }); }
+  else if (hit.startsWith('ugcPlay:')) { const u = (social.list || []).find(x => x.code === hit.slice(8)); if (u) playUgc({ title: u.title, author: u.author_nick, code: u.code, def: u.def }); }
+  else if (hit.startsWith('ugcLike:')) { socialCall('/ugc/like', { code: hit.slice(8) }, () => { social.list = null; }); }
+  else if (hit.startsWith('buy:')) { socialCall('/shop/buy', { item: hit.slice(4) }, r => { net.me = r.me; net.meT = Date.now(); }); }
+  else if (hit.startsWith('equip:')) { const id = hit.slice(6), it = social.shop[id]; const cur = net.me || {}; const badge = it.kind === 'badge' ? id : (cur.items || []).find(i => social.shop[i] && social.shop[i].kind === 'badge' && social.shop[i].value === cur.badge) || ''; const paint = it.kind === 'paint' ? id : (cur.items || []).find(i => social.shop[i] && social.shop[i].kind === 'paint' && social.shop[i].value === cur.paint) || ''; socialCall('/shop/equip', { badge, paint }, r => { net.me = r.me; net.meT = Date.now(); }); }
+  else if (hit.startsWith('unequip:')) { const kind = hit.slice(8), cur = net.me || {}; const badge = kind === 'badge' ? '' : (cur.items || []).find(i => social.shop[i] && social.shop[i].kind === 'badge' && social.shop[i].value === cur.badge) || ''; const paint = kind === 'paint' ? '' : (cur.items || []).find(i => social.shop[i] && social.shop[i].kind === 'paint' && social.shop[i].value === cur.paint) || ''; socialCall('/shop/equip', { badge, paint }, r => { net.me = r.me; net.meT = Date.now(); }); }
   else if (hit === 'back') { menuState = 'main'; resetArmed = 0; }
   else if (hit.startsWith('toggle:')) { const k = hit.slice(7); settings[k] = !settings[k]; saveSettings(); applySettings(); }
   else if (hit === 'reset') {
@@ -1078,7 +1381,7 @@ function addRankXp(n) {
   const before = rankOf(meta.rankXp).name;
   meta.rankXp += n;
   const after = rankOf(meta.rankXp);
-  if (after.name !== before) { showMsg('⭐ НОВ РАНГ: ' + after.name.toUpperCase() + '!', 4); AudioSys.gouranga(); }
+  if (after.name !== before) { showMsg('⭐ НОВ РАНГ: ' + after.name.toUpperCase() + '!', 4); AudioSys.gouranga(); netGold('rankup'); }
   saveMeta();
 }
 function dailyKey(off) {
@@ -1109,6 +1412,7 @@ function dailyProgress(id, amt) {
     addScore(rew, player.x, player.y - 24);
     addRankXp(10);
     netDaily(meta.daily.date, meta.daily.taskIdx, Math.round(gameT));
+    netGold('daily');
     showMsg('📅 Дневна задача изпълнена! +' + fmtMoney(rew) +
       (meta.daily.streak > 1 ? ' · Серия: ' + meta.daily.streak + ' дни' : ''), 4);
   } else {
@@ -1956,6 +2260,7 @@ function startWithCity(i) {
   started = true;
   AudioSys.init();
   MusicSys.start();
+  if (pendingUgc) { const u = pendingUgc; pendingUgc = null; setTimeout(() => startCustomMission(u), 400); }
 }
 let message = null, messageT = 0;
 let scoreBest = 0;
@@ -2787,6 +3092,7 @@ function endMission(win) {
   if (mission.type === 'hit') for (const p of (mission.targets || [mission.target])) if (p) p.markTarget = false;
   mission.targets = null;
   if (mission.type === 'chase' && mission.target) { mission.target.flee = false; mission.target.marked = false; }
+  if (mission.ugc) { netUgcPlay(mission.ugc, !!win); mission.ugc = null; }
   if (win) {
     missionsDone++;
     if (mission.tableIdx != null && !doneMissions.includes(mission.tableIdx)) doneMissions.push(mission.tableIdx);
@@ -2796,6 +3102,7 @@ function endMission(win) {
     dailyProgress('missions', 1);
     autosaveRun();
     netSubmit();
+    netGold('mission');
     if (mission.tableIdx != null) netMission(mission.tableIdx, Math.max(1, Math.round(gameT - (mission.startedAt || gameT))));
     addScore(mission.reward, player.x, player.y - 20);
     let extra = '';
@@ -2952,7 +3259,7 @@ window.addEventListener('keydown', e => {
   if (!started) {
     if (menuState !== 'cities') {
       if (e.key === 'Enter' || e.key === ' ') menuPrimary();
-      else if (e.key === 'Escape') { if (menuState === 'lobby') { MP.leaveRoom(); menuState = 'online'; } else menuState = 'main'; resetArmed = 0; }
+      else if (e.key === 'Escape') { if (menuState === 'lobby') { MP.leaveRoom(); menuState = 'online'; } else if (['crew', 'friends', 'creator'].includes(menuState)) menuState = 'community'; else menuState = 'main'; resetArmed = 0; }
       return;
     }
     if (e.key === 'Escape') { menuState = 'main'; return; }
@@ -3124,6 +3431,7 @@ function tryEnterCar() {
     addScore(10, best.x, best.y);
     showMsg('Открадна: ' + best.name, 1.6);
     collectCar(best.kind);
+    if (net.me && net.me.paint && !best.gear && best.kind !== 'police') best.color = net.me.paint;   // купената боя
   }
 }
 function exitCar() {
@@ -5844,6 +6152,11 @@ function drawStartScreen() {
   if (menuState === 'board') { drawBoardMenu(); return; }
   if (menuState === 'online') { drawOnlineMenu(); return; }
   if (menuState === 'lobby') { drawLobbyMenu(); return; }
+  if (menuState === 'community') { drawCommunityMenu(); return; }
+  if (menuState === 'crew') { drawCrewMenu(); return; }
+  if (menuState === 'friends') { drawFriendsMenu(); return; }
+  if (menuState === 'creator') { drawCreatorMenu(); return; }
+  if (menuState === 'shop') { drawShopMenu(); return; }
   menuButtons = [];
   ctx.fillStyle = '#0a0a12';
   ctx.fillRect(0, 0, VW, VH);
