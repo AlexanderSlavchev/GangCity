@@ -263,7 +263,7 @@ window.onAdReward = function (hook) {
 };
 
 /* ---------------- Настройки ---------------- */
-const settings = { sfx: true, music: true, vibro: true, lowFx: false, bigCtrl: false };
+const settings = { sfx: true, music: true, vibro: true, lowFx: false, bigCtrl: false, splitCar: true };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('gangcity_settings') || '{}')); } catch (e) {}
 function saveSettings() { try { localStorage.setItem('gangcity_settings', JSON.stringify(settings)); } catch (e) {} }
 function applySettings() {
@@ -315,6 +315,7 @@ function drawSettingsMenu() {
   const rows = [
     ['🔊 Звукови ефекти', 'sfx'], ['🎵 Музика', 'music'], ['📳 Вибрация при удар', 'vibro'],
     ['⚡ Икономичен режим (слаб телефон)', 'lowFx'], ['🕹 По-големи бутони', 'bigCtrl'],
+    ['🚗 Кола: две гъби (завой + газ/спирачка)', 'splitCar'],
   ];
   const w = Math.min(340, VW - 40), h = 42, x = VW / 2 - w / 2;
   let y = VH * 0.19;
@@ -2357,13 +2358,27 @@ const touch = {
   layout() {
     const m = Math.min(VW, VH) * (settings.bigCtrl ? 1.25 : 1);
     const br = clamp(m * 0.085, 30, 46);
-    this.stickBase = { x: VW * 0.16, y: VH * 0.72, r: clamp(m * 0.16, 56, 86) };
-    this.buttons = {
-      fire:   { x: VW - br * 1.6, y: VH - br * 3.9, r: br * 1.15, label: '🔫' },
-      action: { x: VW - br * 3.9, y: VH - br * 1.7, r: br,        label: '🚗' },
-      brake:  { x: VW - br * 1.6, y: VH - br * 1.7, r: br,        label: '🛑' },
-      weapon: { x: VW - br * 3.9, y: VH - br * 4.2, r: br * 0.8,  label: '🔁' },
-    };
+    const sr = clamp(m * 0.16, 56, 86);
+    this.stickBase = { x: VW * 0.16, y: VH * 0.72, r: sr };
+    this.split = !!(settings.splitCar && player.car);
+    this.stick2Base = { x: VW - sr * 1.15, y: VH * 0.66, r: sr };
+    if (!this.stick2) this.stick2 = { id: -1, cx: 0, cy: 0, dy: 0, active: false };
+    if (this.split) {
+      // В кола: дясна гъба = газ/спирачка. Стрелба само ако возилото има оръдие.
+      const armed = player.car.kind === 'tank' || player.car.kind === 'cannon' || player.car.kind === 'heli';
+      this.buttons = {
+        action: { x: VW - sr * 2.6 - br * 1.2, y: VH - br * 1.5, r: br, label: '🚗' },
+        brake:  { x: VW - br * 1.4, y: VH * 0.66 - sr - br * 1.5, r: br, label: '🛑' },
+      };
+      if (armed) this.buttons.fire = { x: VW - sr * 2.6 - br * 1.2, y: VH - br * 4.2, r: br * 1.15, label: '🔫' };
+    } else {
+      this.buttons = {
+        fire:   { x: VW - br * 1.6, y: VH - br * 3.9, r: br * 1.15, label: '🔫' },
+        action: { x: VW - br * 3.9, y: VH - br * 1.7, r: br,        label: '🚗' },
+        brake:  { x: VW - br * 1.6, y: VH - br * 1.7, r: br,        label: '🛑' },
+        weapon: { x: VW - br * 3.9, y: VH - br * 4.2, r: br * 0.8,  label: '🔁' },
+      };
+    }
     for (const k in this.buttons) { this.buttons[k].held = false; this.buttons[k].id = -1; }
   }
 };
@@ -2396,6 +2411,12 @@ function touchStart(e) {
       touch.stick.cx = x; touch.stick.cy = y;
       touch.stick.dx = 0; touch.stick.dy = 0;
       touch.stick.active = true;
+    } else if (!handled && touch.split && x >= VW * 0.55 && touch.stick2.id === -1) {
+      const b2 = touch.stick2Base;
+      touch.stick2.id = t.identifier;
+      touch.stick2.cx = b2.x; touch.stick2.cy = b2.y;
+      touch.stick2.dy = clamp((y - b2.y) / b2.r, -1, 1);
+      touch.stick2.active = true;
     }
   }
 }
@@ -2409,6 +2430,9 @@ function touchMove(e) {
       if (d > r) { dx *= r / d; dy *= r / d; }
       touch.stick.dx = dx / r; touch.stick.dy = dy / r;
     }
+    if (touch.stick2 && t.identifier === touch.stick2.id) {
+      touch.stick2.dy = clamp((t.clientY - touch.stick2.cy) / touch.stick2Base.r, -1, 1);
+    }
   }
 }
 function touchEnd(e) {
@@ -2417,6 +2441,9 @@ function touchEnd(e) {
     if (t.identifier === touch.stick.id) {
       touch.stick.id = -1; touch.stick.active = false;
       touch.stick.dx = 0; touch.stick.dy = 0;
+    }
+    if (touch.stick2 && t.identifier === touch.stick2.id) {
+      touch.stick2.id = -1; touch.stick2.active = false; touch.stick2.dy = 0;
     }
     for (const name in touch.buttons) {
       const b = touch.buttons[name];
@@ -2435,6 +2462,7 @@ canvas.addEventListener('mousedown', e => {
 });
 
 function inputState() {
+  if (touch.lastCar !== !!player.car) { touch.lastCar = !!player.car; touch.layout(); }
   let mx = 0, my = 0, fire = false, brake = false;
   if (keys['w'] || keys['arrowup']) my -= 1;
   if (keys['s'] || keys['arrowdown']) my += 1;
@@ -2442,12 +2470,16 @@ function inputState() {
   if (keys['d'] || keys['arrowright']) mx += 1;
   if (keys['f'] || keys['control']) fire = true;
   if (keys[' ']) brake = true;
-  if (touch.stick.active) { mx += touch.stick.dx; my += touch.stick.dy; }
+  if (touch.stick.active) {
+    mx += touch.stick.dx;
+    if (!touch.split) my += touch.stick.dy;          // с две гъби лявата само завива
+  }
+  if (touch.split && touch.stick2.active) my += touch.stick2.dy;
   if (touch.buttons.fire && touch.buttons.fire.held) fire = true;
   if (touch.buttons.brake && touch.buttons.brake.held) brake = true;
   const len = Math.hypot(mx, my);
   if (len > 1) { mx /= len; my /= len; }
-  return { mx, my, fire, brake };
+  return { mx, my, fire, brake, split: !!touch.split };
 }
 function cycleWeapon() {
   for (let i = 1; i <= WEAPONS.length; i++) {
@@ -2689,7 +2721,7 @@ function updatePlayer(dt, inp) {
     const c = player.car;
     if (c.kind === 'tank' || c.kind === 'cannon') {
       player.fireT = 1.15;
-      const aim = (inp.mx || inp.my) ? Math.atan2(inp.my, inp.mx) : (c.turret !== undefined ? c.turret : c.angle);
+      const aim = (!inp.split && (inp.mx || inp.my)) ? Math.atan2(inp.my, inp.mx) : c.angle;
       c.turret = aim;
       const mx2 = c.x + Math.cos(aim) * (c.l / 2 + 16), my2 = c.y + Math.sin(aim) * (c.l / 2 + 16);
       projectiles.push({ type: 'rocket', x: mx2, y: my2, vx: Math.cos(aim) * 560, vy: Math.sin(aim) * 560, life: 680 / 560, dmg: 45, police: false });
@@ -2752,7 +2784,13 @@ function updatePlayerFoot(dt, inp) {
 function updatePlayerHeli(dt, inp, c) {
   c.flying = true;
   c.rotor = (c.rotor || 0) + dt * 26;
-  if (inp.mx || inp.my) {
+  if (inp.split) {
+    c.angle += inp.mx * 2.3 * dt;
+    const thr = -inp.my;
+    if (thr > 0.1) c.speed = Math.min(c.maxSpeed, c.speed + c.accel * thr * dt);
+    else if (thr < -0.1) c.speed -= c.speed * 3 * dt;
+    else c.speed -= c.speed * 1.5 * dt;
+  } else if (inp.mx || inp.my) {
     const want = Math.atan2(inp.my, inp.mx);
     let da = want - c.angle;
     while (da > Math.PI) da -= Math.PI * 2;
@@ -5133,8 +5171,24 @@ function drawTouchControls() {
   ctx.beginPath(); ctx.arc(scx, scy, sb.r, 0, Math.PI * 2); ctx.stroke();
   ctx.fillStyle = '#fff';
   ctx.beginPath();
-  ctx.arc(scx + touch.stick.dx * sb.r, scy + touch.stick.dy * sb.r, sb.r * 0.35, 0, Math.PI * 2);
+  ctx.arc(scx + touch.stick.dx * sb.r, scy + (touch.split ? 0 : touch.stick.dy) * sb.r, sb.r * 0.35, 0, Math.PI * 2);
   ctx.fill();
+  if (touch.split) {
+    const b2 = touch.stick2Base, st2 = touch.stick2;
+    const w = b2.r * 0.9, h = b2.r * 2.2;
+    ctx.globalAlpha = 0.35;
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(b2.x - w / 2, b2.y - h / 2, w, h, w / 2); else ctx.rect(b2.x - w / 2, b2.y - h / 2, w, h);
+    ctx.stroke();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(b2.x, b2.y + (st2.active ? st2.dy : 0) * b2.r, b2.r * 0.35, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 0.7;
+    ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('ГАЗ ▲', b2.x, b2.y - h / 2 - 12);
+    ctx.fillText('▼ НАЗАД', b2.x, b2.y + h / 2 + 12);
+    ctx.textBaseline = 'top';
+  }
   for (const name in touch.buttons) {
     const b = touch.buttons[name];
     ctx.globalAlpha = b.held ? 0.6 : 0.35;
