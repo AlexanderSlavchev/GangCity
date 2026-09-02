@@ -833,6 +833,14 @@ const MP = {
     R = Math.random; level = this.savedLevel;
     playerToStart(); spawnWorld();
     player.x += (R() - 0.5) * 90; player.y += (R() - 0.5) * 60;
+    { // отместването да не те вкара в сграда/вода/затворен двор
+      const tx = Math.floor(player.x / TILE), ty = Math.floor(player.y / TILE);
+      const t = map[ty * MW + tx];
+      if (t === T.BUILD || t === T.WATER || (t !== T.ROAD && !isReachable(tx, ty))) {
+        const sp = nearestSafeSpot(player.x, player.y);
+        player.x = sp.x + (R() - 0.5) * 10; player.y = sp.y + (R() - 0.5) * 10;
+      }
+    }
     if (settings.traffic < 1) for (let i = cars.length - 1; i >= 0; i--) if (!cars[i].parked && R() > settings.traffic) cars.splice(i, 1);
     if (settings.weapons === 'all') { player.ammo = [-1, 80, 150, 60, 8, 10, 80]; player.weapon = 2; }
     player.hp = 100; player.armor = 0; player.dead = false; player.busted = false; player.heat = 0; recalcWanted();
@@ -1794,6 +1802,7 @@ function genCityMap(idx) {
   }
 
   // Нулиране на специалните слоеве
+  reachMap = null;
   yellowRoad = null; pedRoad = null; crossWalkMap = null; lmMap = null;
   landmarks = []; pedZoneTiles = [];
   laneDirMap = new Uint8Array(MW * MH).fill(255);
@@ -2160,6 +2169,27 @@ function laneCenterFor(dir, x, y) {
     return { x, y };
   }
 }
+// Достижимост: кои плочки са свързани с пътната мрежа. Пази играча от затворени дворове.
+let reachMap = null;
+function computeReach() {
+  reachMap = new Uint8Array(MW * MH);
+  const stack = [];
+  for (let i = 0; i < map.length; i++) if (map[i] === T.ROAD) { reachMap[i] = 1; stack.push(i); }
+  while (stack.length) {
+    const i = stack.pop(), x = i % MW, y = (i / MW) | 0;
+    for (const [nx, ny] of [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]]) {
+      if (nx < 0 || ny < 0 || nx >= MW || ny >= MH) continue;
+      const j = ny * MW + nx, t = map[j];
+      if (reachMap[j] || t === T.BUILD || t === T.WATER) continue;
+      reachMap[j] = 1; stack.push(j);
+    }
+  }
+}
+function isReachable(tx, ty) {
+  if (tx < 0 || ty < 0 || tx >= MW || ty >= MH) return false;
+  if (!reachMap || reachMap.length !== MW * MH) computeReach();
+  return !!reachMap[ty * MW + tx];
+}
 function nearestSideTile(px, py, maxR) {
   let best = null, bd = (maxR || 400) * (maxR || 400);
   const ctx0 = Math.floor(px / TILE), cty0 = Math.floor(py / TILE);
@@ -2167,12 +2197,26 @@ function nearestSideTile(px, py, maxR) {
     for (let dx = -10; dx <= 10; dx++) {
       const tx = ctx0 + dx, ty = cty0 + dy;
       if (tileAt(tx, ty) !== T.SIDE) continue;
+      if (!isReachable(tx, ty)) continue;               // затворен двор — не е изход
       const x = tx * TILE + TILE / 2, y = ty * TILE + TILE / 2;
       const d = dist2(x, y, px, py);
       if (d < bd) { bd = d; best = { x, y }; }
     }
   }
   return best;
+}
+// Гарантирано безопасно място: тротоар до пътя, а ако няма — самият път
+function nearestSafeSpot(px, py) {
+  const side = nearestSideTile(px, py, 1200);
+  if (side) return side;
+  let best = null, bd = 1e18;
+  const ctx0 = Math.floor(px / TILE), cty0 = Math.floor(py / TILE);
+  for (let ty = 0; ty < MH; ty++) for (let tx = 0; tx < MW; tx++) {
+    if (map[ty * MW + tx] !== T.ROAD) continue;
+    const d = (tx - ctx0) * (tx - ctx0) + (ty - cty0) * (ty - cty0);
+    if (d < bd) { bd = d; best = { x: tx * TILE + TILE / 2, y: ty * TILE + TILE / 2 }; }
+  }
+  return best || { x: px, y: py };
 }
 function blockDoor(key) {
   // Точка на тротоара до центъра на блока
@@ -2609,9 +2653,14 @@ function addScore(points, atX, atY) {
 }
 
 function playerToStart() {
-  const s = nearestSideTile(MW / 2 * TILE, MH / 2 * TILE, 600);
-  player.x = s ? s.x : MW / 2 * TILE;
-  player.y = s ? s.y : MH / 2 * TILE;
+  const s = nearestSafeSpot(MW / 2 * TILE, MH / 2 * TILE);
+  player.x = s.x; player.y = s.y;
+  // Последна проверка: ако по някаква причина плочката е недостижима, местим на най-близкия път
+  const tx = Math.floor(player.x / TILE), ty = Math.floor(player.y / TILE);
+  if (!isReachable(tx, ty) && map[ty * MW + tx] !== T.ROAD) {
+    const r = nearestSafeSpot(player.x + TILE, player.y + TILE);
+    player.x = r.x; player.y = r.y;
+  }
   camX = player.x; camY = player.y;
 }
 
