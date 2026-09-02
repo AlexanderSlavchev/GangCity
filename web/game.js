@@ -2326,6 +2326,17 @@ const AudioSys = {
     src.start(); src.stop(c.currentTime + (o.dur || 0.2) + 0.05);
   },
   // Тон с плавна смяна на честотата
+  hushLoops() {
+    // Постоянните цикли нямат край — в менюто гейновете им трябва да са на нула,
+    // иначе последната им стойност (двигател, дъжд, глъч) остава да свири.
+    const c = this.ctx; if (!c) return;
+    const t = c.currentTime;
+    for (const g of [this.engG, this.sirG, this.rainL && this.rainL.g, this.crowd && this.crowd.g,
+                     this.skid && this.skid.g, this.engN && this.engN.g]) {
+      if (!g) continue;
+      try { g.gain.cancelScheduledValues(t); g.gain.setTargetAtTime(0, t, 0.15); } catch (e) {}
+    }
+  },
   tone(o) {
     if (!started) return;             // менютата: само главната тема, нищо друго
     if (!this.ctx) return;
@@ -6826,6 +6837,7 @@ let menuFadeUntil = 0;
 // после главната тема се надига — независимо по кой път си стигнал до менюто.
 function audioToMenuFade() {
   menuFadeUntil = Date.now() + 1100;
+  AudioSys.hushLoops();
   const c = AudioSys.ctx;
   clearTimeout(MusicSys.timer); MusicSys.timer = null; MusicSys.pausedAt = null;
   if (MusicSys.cur) {
@@ -6850,8 +6862,10 @@ function audioToMenuFade() {
     } catch (e) {}
   }
 }
+let hushT = 0;
 function menuMusicTick() {
   if (!started) {
+    if (Date.now() - hushT > 1000) { hushT = Date.now(); AudioSys.hushLoops(); }
     if (settings.music) {
       if (MusicSys.cur || MusicSys.timer) audioToMenuFade();
       else if (Date.now() >= menuFadeUntil) MenuMusic.play();
