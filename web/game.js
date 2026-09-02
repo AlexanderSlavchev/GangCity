@@ -2656,7 +2656,111 @@ const MenuMusic = {
 if (typeof document !== 'undefined' && document.addEventListener) {
   const kick = () => { if (!started && settings.music) { MenuMusic.lastTry = 0; MenuMusic.play(); } };
   for (const ev of ['pointerdown', 'touchstart', 'keydown', 'mousedown']) document.addEventListener(ev, kick, { capture: true, passive: true });
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) kick(); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      // Играчът излезе от играта: пауза (в единична игра) и пълна тишина
+      if (started && !gameOver) openPauseMenu();
+      if (AudioSys.ctx && AudioSys.ctx.state === 'running') { try { AudioSys.ctx.suspend().catch(() => {}); } catch (e) {} }
+    } else {
+      if (AudioSys.ctx && AudioSys.ctx.state === 'suspended') { try { AudioSys.ctx.resume().catch(() => {}); } catch (e) {} }
+      kick();
+    }
+  });
+  window.addEventListener('blur', () => {
+    if (started && !gameOver) openPauseMenu();
+    if (AudioSys.ctx && AudioSys.ctx.state === 'running') { try { AudioSys.ctx.suspend().catch(() => {}); } catch (e) {} }
+  });
+  window.addEventListener('focus', () => {
+    if (AudioSys.ctx && AudioSys.ctx.state === 'suspended') { try { AudioSys.ctx.resume().catch(() => {}); } catch (e) {} }
+  });
+}
+
+let pauseMenu = false;                 // отворено пауза меню (в MP светът продължава)
+let pauseButtons = [];                  // бутоните на пауза менюто
+let hudButtons = [];                    // малките бутони в играта (☎ мисия, ⏸ пауза)
+function currentObjectiveText() {
+  if (mission.active) return '☎ ' + mission.text + (mission.timer > 0 ? '  ·  ⏱ ' + Math.ceil(mission.timer) + GCT('с') : '');
+  if (MP.active && MP.rules) return '🌐 ' + MP_MODES[MP.rules.mode] + ' — ' + MP_MODE_DESC[MP.rules.mode];
+  return GCT('Няма активна мисия — търси звънящ телефон ☎. Цел: ') + fmtMoney(targetScore);
+}
+function openPauseMenu() { pauseMenu = true; if (!MP.active) paused = true; }
+function closePauseMenu() { pauseMenu = false; if (!MP.active) paused = false; }
+function exitToMenu() {
+  pauseMenu = false; paused = false;
+  if (MP.active) { MP.leaveGame(); return; }         // MP сам връща в менюто
+  autosaveRun(); cloudPush();
+  started = false; player.car = null; menuState = 'main';
+  MusicSys.stopAll();
+}
+function drawPauseMenu() {
+  pauseButtons = [];
+  ctx.fillStyle = 'rgba(5,5,12,0.82)'; ctx.fillRect(0, 0, VW, VH);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = 'bold 30px sans-serif'; ctx.fillStyle = '#ffd23c';
+  ctx.fillText(GCT('ПАУЗА'), VW / 2, VH * 0.2);
+  ctx.font = '14px sans-serif'; ctx.fillStyle = '#ddd';
+  const obj = currentObjectiveText();
+  // текстът на мисията, пренесен на редове
+  const words = obj.split(' '); let line = '', ly = VH * 0.32;
+  for (const w of words) {
+    if (ctx.measureText(line + ' ' + w).width > VW - 60) { ctx.fillText(line, VW / 2, ly); ly += 20; line = w; }
+    else line = line ? line + ' ' + w : w;
+  }
+  ctx.fillText(line, VW / 2, ly);
+  const bw = Math.min(280, VW - 80), bh = clamp(VH * 0.1, 40, 48), x = VW / 2 - bw / 2;
+  let y = Math.max(ly + 30, VH * 0.48);
+  const btn = (label, act, style) => {
+    ctx.fillStyle = style === 'primary' ? '#ffd23c' : 'rgba(255,255,255,0.1)';
+    ctx.fillRect(x, y, bw, bh);
+    ctx.strokeStyle = style === 'primary' ? '#ffd23c' : 'rgba(255,255,255,0.3)'; ctx.lineWidth = 1; ctx.strokeRect(x, y, bw, bh);
+    ctx.fillStyle = style === 'primary' ? '#111' : '#fff';
+    ctx.font = 'bold 16px sans-serif';
+    ctx.fillText(label, VW / 2, y + bh / 2);
+    pauseButtons.push({ x, y, w: bw, h: bh, act });
+    y += bh + 14;
+  };
+  btn('▶  ' + tr('continue').replace('▶  ', ''), 'resume', 'primary');
+  btn(MP.active ? GCT('НАПУСНИ МАЧА') : GCT('ГЛАВНО МЕНЮ'), 'exit');
+  ctx.textBaseline = 'top';
+}
+function pauseTap(x, y) {
+  for (const b of pauseButtons) {
+    if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) {
+      if (b.act === 'resume') closePauseMenu();
+      else if (b.act === 'exit') exitToMenu();
+      return true;
+    }
+  }
+  return false;
+}
+function drawHudButtons() {
+  hudButtons = [];
+  const size = clamp(Math.min(VW, VH) * 0.075, 30, 40);
+  const mini = clamp(Math.min(VW, VH) * 0.22, 90, 150);
+  const x = VW - size - 10, y0 = mini + 20 + (MP.active ? 34 : 0);
+  const mk = (icon, act, i) => {
+    const y = y0 + i * (size + 8);
+    ctx.fillStyle = 'rgba(10,10,18,0.6)';
+    ctx.beginPath(); ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,210,60,0.5)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.font = Math.round(size * 0.52) + 'px sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#ffd23c';
+    ctx.fillText(icon, x + size / 2, y + size / 2 + 1);
+    hudButtons.push({ x, y, w: size, h: size, act });
+  };
+  mk('☎', 'mission', 0);
+  mk('⏸', 'pause', 1);
+  ctx.textBaseline = 'top';
+}
+function hudTap(x, y) {
+  for (const b of hudButtons) {
+    if (x >= b.x - 6 && x <= b.x + b.w + 6 && y >= b.y - 6 && y <= b.y + b.h + 6) {
+      if (b.act === 'mission') showMsg(currentObjectiveText(), 6);
+      else if (b.act === 'pause') openPauseMenu();
+      return true;
+    }
+  }
+  return false;
 }
 
 let skidActive = false;  // играчът поднася в момента (за звука)
@@ -3699,7 +3803,9 @@ window.addEventListener('keydown', e => {
   if (gameOver) { restartGame(); return; }
   if (e.key.toLowerCase() === 'e' || e.key === 'Enter') actionPressed = true;
   if (e.key.toLowerCase() === 'q') cycleWeapon();
-  if (e.key.toLowerCase() === 'p') paused = !paused;
+  if (e.key.toLowerCase() === 'p') { if (pauseMenu) closePauseMenu(); else openPauseMenu(); }
+  if (e.key.toLowerCase() === 'm') showMsg(currentObjectiveText(), 6);
+  if (e.key === 'Escape' && pauseMenu) closePauseMenu();
 });
 window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
 
@@ -3742,6 +3848,11 @@ function touchStart(e) {
     const t0 = e.changedTouches[0];
     menuTap(t0.clientX, t0.clientY);
     return;
+  }
+  {
+    const t0 = e.changedTouches[0];
+    if (pauseMenu) { pauseTap(t0.clientX, t0.clientY); return; }
+    if (hudTap(t0.clientX, t0.clientY)) return;
   }
   if (MP.results && MP.active) { MP.closeResults(); return; }
   if (unlockScreen) { const t0 = e.changedTouches[0]; unlockTap(t0.clientX, t0.clientY); return; }
@@ -3810,6 +3921,8 @@ canvas.addEventListener('touchcancel', touchEnd, { passive: false });
 canvas.addEventListener('mousedown', e => {
   if (!started) menuTap(e.clientX, e.clientY);
   else if (MP.results) MP.closeResults();
+  else if (started && pauseMenu) pauseTap(e.clientX, e.clientY);
+  else if (started && hudTap(e.clientX, e.clientY)) { /* HUD бутон */ }
   else if (unlockScreen) unlockTap(e.clientX, e.clientY);
   else if (gameOver) restartGame();
 });
@@ -6513,7 +6626,9 @@ function drawHUD() {
     ctx.fillText(GCT('Резултат: ') + fmtMoney(score) + (score >= scoreBest ? GCT(' · НОВ РЕКОРД!') : GCT(' · Рекорд: ') + fmtMoney(scoreBest)), VW / 2, VH / 2 + 44);
     ctx.fillText(IS_TOUCH ? GCT('Докосни за нова игра') : GCT('Натисни клавиш за нова игра'), VW / 2, VH / 2 + 74);
   }
-  if (paused && !gameOver) bigCenterText(GCT('ПАУЗА'), '#fff');
+  if (started && !gameOver && !unlockScreen && !MP.results) drawHudButtons();
+  if (pauseMenu && !gameOver) drawPauseMenu();
+  else if (paused && !gameOver) bigCenterText(GCT('ПАУЗА'), '#fff');
 
   // Тъч контроли
   if (IS_TOUCH && !gameOver) drawTouchControls();
