@@ -2516,7 +2516,9 @@ let citySwitchPending = false, travelToName = '';
 // ---------------- Фонова музика (mp3 с кросфейд) ----------------
 const MusicSys = {
   tracks: ['audio/track0.mp3','audio/track1.mp3','audio/track2.mp3',
-           'audio/track3.mp3','audio/track4.mp3','audio/track5.mp3'],
+           'audio/track3.mp3','audio/track4.mp3','audio/track5.mp3',
+           'audio/track6.mp3','audio/track7.mp3','audio/track8.mp3',
+           'audio/track9.mp3','audio/track10.mp3'],
   bufs: {}, cur: null, idx: 0, fading: false, on: true, timer: null, pausedAt: null,
   order: [], pos: 0,
   FADE: 3.5, VOL: 0.16,
