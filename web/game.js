@@ -15,6 +15,8 @@
 // ---------------- Константи ----------------
 const TILE = 48;
 let MW = 64, MH = 64;   // онлайн картите се удвояват (виж MP.startGame)
+let MS = 1;                                        // мащаб спрямо базовата 64×64 карта
+const SC = v => Math.round(v * MS);                // координата от ръчния план → текущата карта
 const BLOCK = 8;
 const T = { GRASS: 0, ROAD: 1, SIDE: 2, BUILD: 3, WATER: 4, PARK: 5 };
 const DAY_LENGTH = 180;
@@ -1031,13 +1033,24 @@ const MP = {
   },
   fetchStats() { fetch(API_BASE + '/api/online').then(r => r.json()).then(j => { this.stats = j; }).catch(() => { this.stats = null; }); },
 };
+const glowSprites = new Map();
+function glowSprite(color) {
+  let c = glowSprites.get(color);
+  if (!c) {
+    c = document.createElement('canvas'); c.width = 96; c.height = 64;
+    const g = c.getContext('2d');
+    const rg = g.createRadialGradient(48, 32, 8, 48, 32, 34);
+    rg.addColorStop(0, color); rg.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = rg; g.beginPath(); g.ellipse(48, 32, 46, 30, 0, 0, Math.PI * 2); g.fill();
+    glowSprites.set(color, c);
+  }
+  return c;
+}
 function drawGlow(x, y, a, color) {
   const s = worldToScreen(x, y);
   ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(a); ctx.scale(camZoom, camZoom);
   ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.55;
-  const g = ctx.createRadialGradient(0, 0, 8, 0, 0, 34);
-  g.addColorStop(0, color); g.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(0, 0, 36, 24, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.drawImage(glowSprite(color), -48, -32);
   ctx.restore();
 }
 function drawOwnGlow() { if (player.car && net.me && net.me.glow) drawGlow(player.car.x, player.car.y, player.car.angle, net.me.glow); }
@@ -1763,6 +1776,7 @@ const miniCanvas = document.createElement('canvas');
 function genCityMap(idx) {
   cityIdx = idx;
   theme = THEMES[idx % THEMES.length];
+  MS = MW / 64;                      // онлайн картите са 2×: всички ръчни координати се мащабират
   seed = 20977 + idx * 7919 + level * 104729;
   const blockType = {};
   for (let by = 0; by < MH / BLOCK; by++) {
@@ -1794,7 +1808,7 @@ function genCityMap(idx) {
   const cb = Math.floor(MW / BLOCK / 2);
   if (theme.sofia) {
     // Встрани от забележителностите в центъра
-    hospitalBlock = '2,2'; policeBlock = '5,1'; resprayBlock = '2,5';
+    hospitalBlock = (2 * MS) + ',' + (2 * MS); policeBlock = (5 * MS) + ',' + (1 * MS); resprayBlock = (2 * MS) + ',' + (5 * MS);
   } else {
     hospitalBlock = (cb - 1) + ',' + cb;
     policeBlock = (cb + 1) + ',' + (cb - 1);
@@ -1852,30 +1866,29 @@ function genCityMap(idx) {
       }
     };
     // Катедралата със златните куполи
-    landmarks.push({ type: 'nevski', x: 40 * TILE, y: 24 * TILE, h: 2, wall: '#eae6dc', roof: '#d9d4c6' });
-    mark(38, 22, 41, 25, 0);
+    landmarks.push({ type: 'nevski', x: SC(40) * TILE, y: SC(24) * TILE, h: 2, wall: '#eae6dc', roof: '#d9d4c6' });
+    mark(SC(38), SC(22), SC(41) + MS - 1, SC(25) + MS - 1, 0);
     // Университетът (Ректоратът)
-    landmarks.push({ type: 'su', x: 48 * TILE, y: 32 * TILE, h: 2, wall: '#c8a058', roof: '#7a3830' });
-    mark(46, 30, 49, 33, 1);
+    landmarks.push({ type: 'su', x: SC(48) * TILE, y: SC(32) * TILE, h: 2, wall: '#c8a058', roof: '#7a3830' });
+    mark(SC(46), SC(30), SC(49) + MS - 1, SC(33) + MS - 1, 1);
     // НДК с парка пред него
-    park(27, 44, 36, 52);
-    landmarks.push({ type: 'ndk', x: 32 * TILE, y: 48 * TILE, h: 2, wall: '#dcd8cc', roof: '#cac6ba' });
-    mark(30, 46, 33, 49, 2);
+    park(SC(27), SC(44), SC(36) + MS - 1, SC(52) + MS - 1);
+    landmarks.push({ type: 'ndk', x: SC(32) * TILE, y: SC(48) * TILE, h: 2, wall: '#dcd8cc', roof: '#cac6ba' });
+    mark(SC(30), SC(46), SC(33) + MS - 1, SC(49) + MS - 1, 2);
     // Градската градина с фонтана
-    park(30, 29, 34, 31);
-    landmarks.push({ type: 'fountain', x: 32.5 * TILE, y: 30.5 * TILE, h: 0 });
+    park(SC(30), SC(29), SC(34) + MS - 1, SC(31) + MS - 1);
+    landmarks.push({ type: 'fountain', x: SC(32.5) * TILE, y: SC(30.5) * TILE, h: 0 });
     // Стадионът в парка
-    park(45, 37, 50, 42);
-    landmarks.push({ type: 'stadium', x: 48 * TILE, y: 40 * TILE, h: 0 });
+    park(SC(45), SC(37), SC(50) + MS - 1, SC(42) + MS - 1);
+    landmarks.push({ type: 'stadium', x: SC(48) * TILE, y: SC(40) * TILE, h: 0 });
 
     // Пешеходната зона на бул. Витоша
-    for (let y = 29; y <= 42; y++) {
-      pedRoad[y * MW + 27] = 1; pedRoad[y * MW + 28] = 1;
-      pedZoneTiles.push([27, y], [28, y]);
+    for (let y = SC(29); y <= SC(42) + MS - 1; y++) {
+      for (let dx = 0; dx < 2 * MS; dx++) { pedRoad[y * MW + SC(27) + dx] = 1; pedZoneTiles.push([SC(27) + dx, y]); }
     }
     // Жълтите павета около Ларгото и Царя
-    for (let y = 20; y <= 33; y++) {
-      for (let x = 24; x <= 45; x++) {
+    for (let y = SC(20); y <= SC(33) + MS - 1; y++) {
+      for (let x = SC(24); x <= SC(45) + MS - 1; x++) {
         if (map[y * MW + x] === T.ROAD && !pedRoad[y * MW + x]) yellowRoad[y * MW + x] = 1;
       }
     }
@@ -1886,7 +1899,7 @@ function genCityMap(idx) {
   policeDoor = blockDoor(policeBlock);
   resprayDoor = blockDoor(resprayBlock);
   crusherDoor = nearestSideTile((MW - 9) * TILE, (MH - 9) * TILE, 1400) || { x: (MW - 9) * TILE, y: (MH - 9) * TILE };
-  churchDoor = nearestSideTile(9 * TILE, 9 * TILE, 1400) || { x: 9 * TILE, y: 9 * TILE };
+  churchDoor = nearestSideTile(SC(9) * TILE, SC(9) * TILE, 1400) || { x: SC(9) * TILE, y: SC(9) * TILE };
 
   // Ленти на решетъчните улици (за трафика и маркировката)
   for (let y = 0; y < MH; y++) {
@@ -1923,12 +1936,13 @@ function buildRuse(blockType) {
     const shore = 3 + Math.round(Math.sin(y * 0.35) * 0.9);
     for (let x = 0; x <= shore; x++) map[y * MW + x] = T.WATER;
     // Кеят — Придунавският парк между реката и булеварда
-    for (let x = shore + 1; x <= 7; x++) map[y * MW + x] = T.PARK;
+    for (let x = shore + 1; x <= SC(8) - 1; x++) map[y * MW + x] = T.PARK;
   }
 
   const idx = (x, y) => y * MW + x;
-  // Хоризонтална улица (двойка редове), с име и ленти
+  // Хоризонтална улица (двойка редове), с име и ленти. Координатите са от плана 64×64 → мащабират се.
   const hR = (y, x0, x1, nameIdx) => {
+    y = SC(y); x0 = SC(x0); x1 = SC(x1) + MS - 1;
     for (let x = x0; x <= x1; x++) {
       for (const [yy, dir] of [[y, 2], [y + 1, 0]]) {   // горна лента запад, долна изток
         const i = idx(x, yy);
@@ -1940,6 +1954,7 @@ function buildRuse(blockType) {
   };
   // Вертикална улица (двойка колони)
   const vR = (x, y0, y1, nameIdx) => {
+    x = SC(x); y0 = SC(y0); y1 = SC(y1) + MS - 1;
     for (let y = y0; y <= y1; y++) {
       for (const [xx, dir] of [[x, 1], [x + 1, 3]]) {    // лява лента юг, дясна север
         const i = idx(xx, y);
@@ -1951,6 +1966,7 @@ function buildRuse(blockType) {
   };
   // Пешеходна отсечка (вертикална двойка колони)
   const pedV = (x, y0, y1, nameIdx) => {
+    x = SC(x); y0 = SC(y0); y1 = SC(y1) + MS - 1;
     for (let y = y0; y <= y1; y++) {
       for (const xx of [x, x + 1]) {
         const i = idx(xx, y);
@@ -1979,8 +1995,8 @@ function buildRuse(blockType) {
   pedV(29, 12, 47, 2);
 
   // Пл. Свобода — пешеходен площад около Паметника на свободата
-  for (let y = 37; y <= 44; y++) {
-    for (let x = 26; x <= 37; x++) {
+  for (let y = SC(37); y <= SC(44) + MS - 1; y++) {
+    for (let x = SC(26); x <= SC(37) + MS - 1; x++) {
       const i = idx(x, y);
       if (map[i] === T.ROAD && !pedRoad[i]) continue;   // не пипай булевардите
       map[i] = T.ROAD; pedRoad[i] = 1;
@@ -1989,17 +2005,18 @@ function buildRuse(blockType) {
     }
   }
   // Градинките на площада (около паметника, като в реалността)
-  for (const [gx0, gy0] of [[27, 38], [34, 38], [27, 42], [34, 42]]) {
-    for (let y = gy0; y <= gy0 + 1; y++) for (let x = gx0; x <= gx0 + 1; x++) {
+  for (const [g0, g1] of [[27, 38], [34, 38], [27, 42], [34, 42]]) {
+    const gx0 = SC(g0), gy0 = SC(g1);
+    for (let y = gy0; y <= gy0 + 2 * MS - 1; y++) for (let x = gx0; x <= gx0 + 2 * MS - 1; x++) {
       map[idx(x, y)] = T.PARK; pedRoad[idx(x, y)] = 0;
     }
   }
 
   // Паркове: Парк на възрожденците (север-изток) + малък до Скобелев
-  for (let y = 3; y <= 14; y++) for (let x = 45; x <= 58; x++) {
+  for (let y = SC(3); y <= SC(14) + MS - 1; y++) for (let x = SC(45); x <= SC(58) + MS - 1; x++) {
     if (map[idx(x, y)] === T.GRASS) map[idx(x, y)] = T.PARK;
   }
-  for (let y = 52; y <= 55; y++) for (let x = 47; x <= 53; x++) {
+  for (let y = SC(52); y <= SC(55) + MS - 1; y++) for (let x = SC(47); x <= SC(53) + MS - 1; x++) {
     if (map[idx(x, y)] === T.GRASS) map[idx(x, y)] = T.PARK;
   }
 
@@ -2011,32 +2028,32 @@ function buildRuse(blockType) {
     }
   };
   // Паметникът на Свободата — в средата на площада
-  landmarks.push({ type: 'monument', x: 32 * TILE, y: 40 * TILE, h: 0 });
+  landmarks.push({ type: 'monument', x: SC(32) * TILE, y: SC(40) * TILE, h: 0 });
   // Доходното здание (Операта на Русе) — южно на площада
-  landmarks.push({ type: 'dohodno', x: 32 * TILE, y: 46.5 * TILE, h: 2, wall: '#e8dcc4', roof: '#3e7a5e' });
-  mark(29, 45, 34, 48, 1);
+  landmarks.push({ type: 'dohodno', x: SC(32) * TILE, y: SC(46.5) * TILE, h: 2, wall: '#e8dcc4', roof: '#3e7a5e' });
+  mark(SC(29), SC(45), SC(34) + MS - 1, SC(48) + MS - 1, 1);
   // Съдебната палата — северозападно от площада
-  landmarks.push({ type: 'court', x: 25.5 * TILE, y: 34.5 * TILE, h: 2, wall: '#ded6c6', roof: '#8a8276' });
-  mark(23, 32, 27, 36, 2);
+  landmarks.push({ type: 'court', x: SC(25.5) * TILE, y: SC(34.5) * TILE, h: 2, wall: '#ded6c6', roof: '#8a8276' });
+  mark(SC(23), SC(32), SC(27) + MS - 1, SC(36) + MS - 1, 2);
   // Операта/Филхармонията — на изток (реална позиция)
-  landmarks.push({ type: 'opera', x: 47 * TILE, y: 32.5 * TILE, h: 2, wall: '#e6d0a8', roof: '#96513a' });
-  mark(45, 31, 48, 34, 3);
+  landmarks.push({ type: 'opera', x: SC(47) * TILE, y: SC(32.5) * TILE, h: 2, wall: '#e6d0a8', roof: '#96513a' });
+  mark(SC(45), SC(31), SC(48) + MS - 1, SC(34) + MS - 1, 3);
   // Пантеонът на Възрожденците — в парка на север, златен купол
-  landmarks.push({ type: 'pantheon', x: 51.5 * TILE, y: 8 * TILE, h: 2, wall: '#e4ddd0', roof: '#cabfae' });
-  mark(50, 6, 53, 9, 4);
+  landmarks.push({ type: 'pantheon', x: SC(51.5) * TILE, y: SC(8) * TILE, h: 2, wall: '#e4ddd0', roof: '#cabfae' });
+  mark(SC(50), SC(6), SC(53) + MS - 1, SC(9) + MS - 1, 4);
   // Катедралата „Св. Троица" — югоизточно от площада
-  landmarks.push({ type: 'trinity', x: 40 * TILE, y: 47.5 * TILE, h: 2, wall: '#e9e2d4', roof: '#b8b0a0' });
-  mark(38, 46, 41, 49, 5);
+  landmarks.push({ type: 'trinity', x: SC(40) * TILE, y: SC(47.5) * TILE, h: 2, wall: '#e9e2d4', roof: '#b8b0a0' });
+  mark(SC(38), SC(46), SC(41) + MS - 1, SC(49) + MS - 1, 5);
   // Шлепове по Дунава
-  landmarks.push({ type: 'boat', x: 1.6 * TILE, y: 20 * TILE, h: 0 });
-  landmarks.push({ type: 'boat', x: 2.2 * TILE, y: 44 * TILE, h: 0 });
+  landmarks.push({ type: 'boat', x: 1.6 * TILE, y: SC(20) * TILE, h: 0 });
+  landmarks.push({ type: 'boat', x: 2.2 * TILE, y: SC(44) * TILE, h: 0 });
 
   // Запълване: тротоари около улиците, сгради в карето
   for (let y = 1; y < MH - 1; y++) {
     for (let x = 1; x < MW - 1; x++) {
       const i = idx(x, y);
       if (map[i] !== T.GRASS) continue;
-      if (x < 8 || x > 60 || y < 2 || y > 61) continue;  // покрайнини — трева
+      if (x < SC(8) || x > SC(60) + MS - 1 || y < SC(2) || y > SC(61) + MS - 1) continue;  // покрайнини — трева
       const nearRoad =
         map[idx(x - 1, y)] === T.ROAD || map[idx(x + 1, y)] === T.ROAD ||
         map[idx(x, y - 1)] === T.ROAD || map[idx(x, y + 1)] === T.ROAD;
@@ -2046,11 +2063,11 @@ function buildRuse(blockType) {
   }
 
   // Входове на службите (реалистично разположени)
-  hospitalDoor = nearestSideTile(13 * TILE, 21 * TILE, 500) || { x: 13 * TILE, y: 21 * TILE };
-  policeDoor = nearestSideTile(13 * TILE, 46 * TILE, 500) || { x: 13 * TILE, y: 46 * TILE };
-  resprayDoor = nearestSideTile(50 * TILE, 47 * TILE, 500) || { x: 50 * TILE, y: 47 * TILE };
+  hospitalDoor = nearestSideTile(SC(13) * TILE, SC(21) * TILE, 500) || { x: SC(13) * TILE, y: SC(21) * TILE };
+  policeDoor = nearestSideTile(SC(13) * TILE, SC(46) * TILE, 500) || { x: SC(13) * TILE, y: SC(46) * TILE };
+  resprayDoor = nearestSideTile(SC(50) * TILE, SC(47) * TILE, 500) || { x: SC(50) * TILE, y: SC(47) * TILE };
   crusherDoor = nearestSideTile((MW - 9) * TILE, (MH - 9) * TILE, 1400) || { x: (MW - 9) * TILE, y: (MH - 9) * TILE };
-  churchDoor = nearestSideTile(9 * TILE, 9 * TILE, 1400) || { x: 9 * TILE, y: 9 * TILE };
+  churchDoor = nearestSideTile(SC(9) * TILE, SC(9) * TILE, 1400) || { x: SC(9) * TILE, y: SC(9) * TILE };
 }
 
 function placePhonesFrenzy() {
@@ -2641,16 +2658,18 @@ function spawnWorld() {
 }
 
 // ---------------- Метро (надземна обиколна линия) ----------------
-const METRO = {
-  xL: 12 * TILE, xR: 52 * TILE, yT: 12 * TILE, yB: 52 * TILE,
-  f: 0.075,           // фактор на височина за проекцията
-  carLen: 50, carGap: 7, carsPerTrain: 3
-};
-METRO.W = METRO.xR - METRO.xL;
-METRO.H = METRO.yB - METRO.yT;
-METRO.P = 2 * (METRO.W + METRO.H);
+const METRO = { f: 0.075, carLen: 50, carGap: 7, carsPerTrain: 3 };
+function computeMetro() {
+  // Пръстенът минава на 12/64 от ръба — на голяма карта обикаля целия град
+  METRO.xL = SC(12) * TILE; METRO.xR = SC(52) * TILE; METRO.yT = SC(12) * TILE; METRO.yB = SC(52) * TILE;
+  METRO.W = METRO.xR - METRO.xL;
+  METRO.H = METRO.yB - METRO.yT;
+  METRO.P = 2 * (METRO.W + METRO.H);
+  METRO.stationS = [METRO.W / 2, METRO.W + METRO.H / 2, METRO.W + METRO.H + METRO.W / 2, 2 * METRO.W + METRO.H + METRO.H / 2];
+}
+computeMetro();
 // Спирки: средите на четирите страни
-METRO.stationS = [METRO.W / 2, METRO.W + METRO.H / 2, METRO.W + METRO.H + METRO.W / 2, 2 * METRO.W + METRO.H + METRO.H / 2];
+/* stationS се смята в computeMetro() */
 const trains = [];
 let stationEntrances = [];
 
@@ -2663,6 +2682,7 @@ function ringPoint(s) {
   return { x: xL, y: yB - (s - 2 * W - H), a: -Math.PI / 2 };
 }
 function initMetro() {
+  computeMetro();
   stationEntrances = METRO.stationS.map(s => {
     const p = ringPoint(s);
     return nearestSideTile(p.x, p.y, 400) || { x: p.x, y: p.y };
