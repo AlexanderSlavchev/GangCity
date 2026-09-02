@@ -2325,6 +2325,7 @@ const AudioSys = {
   },
   // Тон с плавна смяна на честотата
   tone(o) {
+    if (!started) return;             // менютата: само главната тема, нищо друго
     if (!this.ctx) return;
     const c = this.ctx;
     const osc = c.createOscillator();
@@ -2594,6 +2595,11 @@ const MusicSys = {
     c.g.gain.linearRampToValueAtTime(0.0001, t + this.FADE);
     try { c.src.stop(t + this.FADE + 0.1); } catch (e) {}
   },
+  stopAll() {                       // пълно спиране (в менютата свири само главната тема)
+    clearTimeout(this.timer); this.timer = null;
+    if (this.cur) { try { this.cur.src.stop(); } catch (e) {} this.cur = null; }
+    this.pausedAt = null;
+  },
   toggle() {
     this.on = !this.on;
     if (!this.on && this.cur) {
@@ -2608,6 +2614,18 @@ const MusicSys = {
     }
     return this.on;
   }
+};
+
+// Главната тема — свири на всички менюта; в играта спира и почва радиото
+const MenuMusic = {
+  a: null, want: false,
+  play() {
+    if (typeof Audio === 'undefined') return;
+    this.want = true;
+    if (!this.a) { this.a = new Audio('audio/menu.mp3'); this.a.loop = true; this.a.volume = 0.45; }
+    if (this.a.paused) this.a.play().catch(() => {});   // преди първия жест браузърът може да откаже — опитваме пак при тап
+  },
+  stop() { this.want = false; if (this.a && !this.a.paused) { this.a.pause(); this.a.currentTime = 0; } },
 };
 
 let skidActive = false;  // играчът поднася в момента (за звука)
@@ -6653,7 +6671,14 @@ function perfTick(dt) {
     }
   }
 }
+function menuMusicTick() {
+  if (!started) {
+    if (settings.music) { if (MusicSys.cur || MusicSys.timer) MusicSys.stopAll(); MenuMusic.play(); }
+    else MenuMusic.stop();
+  } else if (MenuMusic.want) MenuMusic.stop();
+}
 function frame(now) {
+  menuMusicTick();
   requestAnimationFrame(frame);
   let dt = (now - lastT) / 1000;
   lastT = now;
