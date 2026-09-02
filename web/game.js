@@ -58,12 +58,16 @@ function shade(hex, k) {
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 let VW = 0, VH = 0, DPR = 1;
+// В WebView (апката) canvas-ът е в пъти по-бавен от Chrome → по-ниска вътрешна резолюция.
+const IS_APP = typeof window.AndroidAds !== 'undefined';
+let RES = IS_APP ? 0.8 : 1;                 // вътрешен мащаб на рендера; пада при слаби кадри
 function resize() {
-  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  DPR = Math.min(window.devicePixelRatio || 1, IS_APP ? 1.5 : 2);
   VW = window.innerWidth; VH = window.innerHeight;
-  canvas.width = Math.round(VW * DPR);
-  canvas.height = Math.round(VH * DPR);
-  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  canvas.width = Math.round(VW * DPR * RES);
+  canvas.height = Math.round(VH * DPR * RES);
+  ctx.setTransform(DPR * RES, 0, 0, DPR * RES, 0, 0);
+  ctx.imageSmoothingEnabled = true;
 }
 window.addEventListener('resize', resize);
 resize();
@@ -4724,8 +4728,9 @@ function drawGround() {
       ctx.fillRect(s.x, s.y, sz, sz);
 
       // Текстурен слой — зърно като на въздушна снимка (подравнено между съседни плочки)
+      // При икономичен режим прескачаме — това са стотици drawImage на кадър, тежки за WebView
       const gsx = (tx & 3) * 48, gsy = (ty & 3) * 48;
-      if (t === T.WATER) {
+      if (settings.lowFx) { /* без текстури */ } else if (t === T.WATER) {
         ctx.globalAlpha = 0.3;
         ctx.drawImage(TEX.organic, gsx, gsy, 48, 48, s.x, s.y, sz, sz);
         ctx.globalAlpha = 1;
@@ -5619,9 +5624,11 @@ function drawBuildings() {
     ctx.fillStyle = roof;
     ctx.fillRect(rx, ry, rw, rh);
     // Чакълеста текстура (подравнена, за да няма шевове между плочките)
-    ctx.globalAlpha = 0.6;
-    ctx.drawImage(TEX.grain, (tx & 3) * 48, (ty & 3) * 48, 48, 48, rx, ry, rw, rh);
-    ctx.globalAlpha = 1;
+    if (!settings.lowFx) {                        // зърното е тежко за WebView; парапетът остава
+      ctx.globalAlpha = 0.6;
+      ctx.drawImage(TEX.grain, (tx & 3) * 48, (ty & 3) * 48, 48, 48, rx, ry, rw, rh);
+      ctx.globalAlpha = 1;
+    }
     // Парапет — само по външните ръбове на сградата (не между плочките)
     ctx.lineWidth = Math.max(1, 2.2 * camZoom);
     for (const e of edges) {
@@ -6581,13 +6588,18 @@ function drawStartScreen() {
 let lastT = performance.now();
 let fpsEMA = 60;
 let perfAcc = 0, perfN = 0, perfBad = 0;
+// Стълбица при слаби кадри: 1) икономичен режим  2) сваляне на резолюцията на стъпки
 function perfTick(dt) {
-  if (settings.lowFx || !started) return;
+  if (!started) return;
   perfAcc += dt; perfN++;
   if (perfAcc >= 1) {
     const fps = perfN / perfAcc; perfAcc = 0; perfN = 0;
     perfBad = fps < 38 ? perfBad + 1 : 0;
-    if (perfBad >= 6) { settings.lowFx = true; saveSettings(); showMsg(tr('autoLow'), 3.5); perfBad = 0; }
+    if (perfBad >= 5) {
+      perfBad = 0;
+      if (!settings.lowFx) { settings.lowFx = true; saveSettings(); showMsg(tr('autoLow'), 3); }
+      else if (RES > 0.55) { RES = Math.max(0.55, +(RES - 0.15).toFixed(2)); resize(); }
+    }
   }
 }
 function frame(now) {
