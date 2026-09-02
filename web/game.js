@@ -786,8 +786,11 @@ const MP = {
       case 'state': {
         const p = this.players.get(m.from);
         if (!p) break;
-        p.tx = m.x; p.ty = m.y; p.ta = m.a; p.car = m.car; p.pt = m.pt || ''; p.gl = m.gl || ''; p.tt = m.tt || ''; p.hp = m.hp; p.w = m.w; p.sc = m.sc; p.dead = m.dead; p.lastT = gameT;
-        if (!p.seen) { p.seen = true; p.x = m.x; p.y = m.y; p.a = m.a; }
+        const na = Number.isFinite(m.a) ? Math.atan2(Math.sin(m.a), Math.cos(m.a)) : p.ta;   // нормализиран, никога NaN
+        p.moveD = Math.hypot(m.x - p.tx, m.y - p.ty);              // колко се е преместил от последния пакет
+        p.tx = m.x; p.ty = m.y; p.ta = na;
+        p.car = m.car; p.pt = m.pt || ''; p.gl = m.gl || ''; p.tt = m.tt || ''; p.hp = m.hp; p.w = m.w; p.sc = m.sc; p.dead = m.dead; p.lastT = gameT;
+        if (!p.seen) { p.seen = true; p.x = m.x; p.y = m.y; p.a = na; }
         break;
       }
       case 'ev': this.onEvent(m); break;
@@ -862,7 +865,17 @@ const MP = {
     const k = Math.min(1, dt * 12);
     for (const p of this.players.values()) {
       p.x += (p.tx - p.x) * k; p.y += (p.ty - p.y) * k;
-      p.a += angDiff(p.a, p.ta) * k;
+      // Ъгъл: който стои на място, има право само на кратка корекция, не на въртене.
+      // Така никакви странни данни от мрежата не могат да завъртят някого на пумпал.
+      const moving = (p.moveD || 0) > 1.5 || Math.hypot(p.tx - p.x, p.ty - p.y) > 4;
+      const d = angDiff(p.a, p.ta);
+      if (moving) p.a += d * k;
+      else {
+        p.spin = (p.spin || 0) + Math.abs(d) * k;
+        if (p.spin < Math.PI * 1.2) p.a += clamp(d, -2.5 * dt, 2.5 * dt);   // прицелване — да, пумпал — не
+      }
+      if (moving) p.spin = 0;
+      p.a = Math.atan2(Math.sin(p.a), Math.cos(p.a));
       if (p.bubbleT > 0) p.bubbleT -= dt;
     }
     if (this.myBubbleT > 0) this.myBubbleT -= dt;
