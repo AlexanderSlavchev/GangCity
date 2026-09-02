@@ -2618,19 +2618,43 @@ const MusicSys = {
 
 // Главната тема — свири на всички менюта; в играта спира и почва радиото
 const MenuMusic = {
-  a: null, want: false, lastTry: 0,
-  play() {
-    if (typeof Audio === 'undefined') return;
-    this.want = true;
-    if (!this.a) { this.a = new Audio('audio/menu.mp3'); this.a.loop = true; this.a.volume = 0.45; this.a.preload = 'auto'; }
-    const now = Date.now();
-    if (this.a.paused && now - this.lastTry > 400) { this.lastTry = now; this.a.play().catch(() => {}); }
+  buf: null, node: null, want: false, loading: false, lastTry: 0,
+  // През Web Audio (същия двигател като радиото), защото той доказано работи в апката;
+  // HTML <audio> елементът в някои WebView-та мълчи независимо от настройките.
+  ensureBuf() {
+    if (this.buf || this.loading || !AudioSys.ctx) return;
+    this.loading = true;
+    fetch('audio/menu.mp3')
+      .then(r => r.arrayBuffer())
+      .then(ab => new Promise((res, rej) => AudioSys.ctx.decodeAudioData(ab, res, rej)))
+      .then(b => { this.buf = b; this.loading = false; })
+      .catch(() => { this.loading = false; });
   },
-  stop() { this.want = false; if (this.a && !this.a.paused) { this.a.pause(); this.a.currentTime = 0; } },
+  play() {
+    this.want = true;
+    const now = Date.now();
+    if (now - this.lastTry < 400) return;
+    this.lastTry = now;
+    AudioSys.init();
+    const c = AudioSys.ctx;
+    if (!c) return;
+    if (c.state === 'suspended') { try { c.resume().catch(() => {}); } catch (e) {} }
+    this.ensureBuf();
+    if (this.node || !this.buf || c.state !== 'running') return;
+    const src = c.createBufferSource(); src.buffer = this.buf; src.loop = true;
+    const g = c.createGain(); g.gain.value = 0.5;
+    src.connect(g); g.connect(AudioSys.master || c.destination);
+    src.start();
+    this.node = { src, g };
+  },
+  stop() {
+    this.want = false;
+    if (this.node) { try { this.node.src.stop(); } catch (e) {} this.node = null; }
+  },
 };
 // Тръгва веднага щом средата позволи: в апката — от първия кадър; в браузър — при първия жест където и да е
 if (typeof document !== 'undefined' && document.addEventListener) {
-  const kick = () => { if (!started && settings.music) MenuMusic.play(); };
+  const kick = () => { if (!started && settings.music) { MenuMusic.lastTry = 0; MenuMusic.play(); } };
   for (const ev of ['pointerdown', 'touchstart', 'keydown', 'mousedown']) document.addEventListener(ev, kick, { capture: true, passive: true });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) kick(); });
 }
