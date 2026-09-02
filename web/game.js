@@ -2618,15 +2618,22 @@ const MusicSys = {
 
 // Главната тема — свири на всички менюта; в играта спира и почва радиото
 const MenuMusic = {
-  a: null, want: false,
+  a: null, want: false, lastTry: 0,
   play() {
     if (typeof Audio === 'undefined') return;
     this.want = true;
-    if (!this.a) { this.a = new Audio('audio/menu.mp3'); this.a.loop = true; this.a.volume = 0.45; }
-    if (this.a.paused) this.a.play().catch(() => {});   // преди първия жест браузърът може да откаже — опитваме пак при тап
+    if (!this.a) { this.a = new Audio('audio/menu.mp3'); this.a.loop = true; this.a.volume = 0.45; this.a.preload = 'auto'; }
+    const now = Date.now();
+    if (this.a.paused && now - this.lastTry > 400) { this.lastTry = now; this.a.play().catch(() => {}); }
   },
   stop() { this.want = false; if (this.a && !this.a.paused) { this.a.pause(); this.a.currentTime = 0; } },
 };
+// Тръгва веднага щом средата позволи: в апката — от първия кадър; в браузър — при първия жест където и да е
+if (typeof document !== 'undefined' && document.addEventListener) {
+  const kick = () => { if (!started && settings.music) MenuMusic.play(); };
+  for (const ev of ['pointerdown', 'touchstart', 'keydown', 'mousedown']) document.addEventListener(ev, kick, { capture: true, passive: true });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) kick(); });
+}
 
 let skidActive = false;  // играчът поднася в момента (за звука)
 
