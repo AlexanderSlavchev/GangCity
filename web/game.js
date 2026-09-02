@@ -2243,7 +2243,9 @@ const AudioSys = {
       this.sfxVol = c.createGain();
       this.sfxVol.gain.value = settings.sfx ? 1 : 0;
       this.master.connect(this.sfxVol);
-      this.sfxVol.connect(c.destination);
+      this.bus = c.createGain();                 // обща шина: през нея затихва ВСИЧКО при връщане в менюто
+      this.sfxVol.connect(this.bus);
+      this.bus.connect(c.destination);
 
       // Градско ехо (за изстрели и взривове)
       this.echoIn = c.createGain(); this.echoIn.gain.value = 1;
@@ -2642,7 +2644,10 @@ const MenuMusic = {
     this.ensureBuf();
     if (this.node || !this.buf || c.state !== 'running') return;
     const src = c.createBufferSource(); src.buffer = this.buf; src.loop = true;
-    const g = c.createGain(); g.gain.value = 0.5;
+    const g = c.createGain();
+    const t = c.currentTime;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.5, t + 1.6);   // плавно се появява след затихналата игра
     src.connect(g); g.connect(AudioSys.master || c.destination);
     src.start();
     this.node = { src, g };
@@ -2690,7 +2695,6 @@ function exitToMenu() {
   if (MP.active) { MP.leaveGame(); return; }         // MP сам връща в менюто
   autosaveRun(); cloudPush();
   started = false; player.car = null; menuState = 'main';
-  MusicSys.stopAll();
 }
 function drawPauseMenu() {
   pauseButtons = [];
@@ -6817,10 +6821,41 @@ function perfTick(dt) {
     }
   }
 }
+let menuFadeUntil = 0;
+// Всичко от играта (радио, двигатели, ехо от изстрели) затихва за секунда,
+// после главната тема се надига — независимо по кой път си стигнал до менюто.
+function audioToMenuFade() {
+  menuFadeUntil = Date.now() + 1100;
+  const c = AudioSys.ctx;
+  clearTimeout(MusicSys.timer); MusicSys.timer = null; MusicSys.pausedAt = null;
+  if (MusicSys.cur) {
+    const cu = MusicSys.cur; MusicSys.cur = null;
+    if (c) {
+      try {
+        const t = c.currentTime;
+        cu.g.gain.cancelScheduledValues(t);
+        cu.g.gain.setValueAtTime(Math.max(0.001, cu.g.gain.value || 1), t);
+        cu.g.gain.linearRampToValueAtTime(0.0001, t + 0.9);
+        cu.src.stop(t + 1);
+      } catch (e) { try { cu.src.stop(); } catch (e2) {} }
+    } else { try { cu.src.stop(); } catch (e) {} }
+  }
+  if (c && AudioSys.bus) {
+    try {
+      const t = c.currentTime;
+      AudioSys.bus.gain.cancelScheduledValues(t);
+      AudioSys.bus.gain.setValueAtTime(1, t);
+      AudioSys.bus.gain.linearRampToValueAtTime(0.0001, t + 0.9);
+      setTimeout(() => { try { const t2 = c.currentTime; AudioSys.bus.gain.cancelScheduledValues(t2); AudioSys.bus.gain.setValueAtTime(1, t2); } catch (e) {} }, 1050);
+    } catch (e) {}
+  }
+}
 function menuMusicTick() {
   if (!started) {
-    if (settings.music) { if (MusicSys.cur || MusicSys.timer) MusicSys.stopAll(); MenuMusic.play(); }
-    else MenuMusic.stop();
+    if (settings.music) {
+      if (MusicSys.cur || MusicSys.timer) audioToMenuFade();
+      else if (Date.now() >= menuFadeUntil) MenuMusic.play();
+    } else { MenuMusic.stop(); if (MusicSys.cur || MusicSys.timer) MusicSys.stopAll(); }
   } else if (MenuMusic.want) MenuMusic.stop();
 }
 function frame(now) {
